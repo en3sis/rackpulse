@@ -40,6 +40,13 @@ if ! grep -qx "## $next" CHANGELOG.md; then
   exit 1
 fi
 
+agent=$(agent_version)
+if ! curl -fsSI "$SITE_URL/agent/$agent/SHA256SUMS" -o /dev/null; then
+  echo "Agent $agent (agent/VERSION) is not published at $SITE_URL/agent/$agent. The app would offer an agent update that does not exist. Run make agent and make publish-agent first"
+  exit 1
+fi
+echo "Agent $agent is published, the app will offer it as the latest agent"
+
 echo "$next" >VERSION
 tag=v$next
 folder=$(release_dir "$next")

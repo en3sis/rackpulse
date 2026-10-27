@@ -12,7 +12,7 @@ make release              # patch: 0.2.1 -> 0.2.2
 make release BUMP=minor   # 0.2.1 -> 0.3.0
 ```
 
-`make release` stops if there are uncommitted changes, or if `CHANGELOG.md` has no section for the new version. Then it:
+`make release` stops if there are uncommitted changes, if `CHANGELOG.md` has no section for the new version, or if the agent version in `agent/VERSION` is not published yet (see "Agent releases"). Then it:
 
 1. Bumps `VERSION`, if the current version is already tagged. An untagged version is released as it is, which is also how a failed release is retried.
 2. Runs `make notarize`: builds, signs, notarizes, staples, and writes `dist/appcast.xml` with the release notes.
@@ -96,7 +96,9 @@ make publish-agent    # upload to R2 under agent/ (inside R2_PREFIX when it is s
 | `agent/install.sh`, `agent/rackpulse-agent-linux-amd64`, `agent/rackpulse-agent-linux-arm64`, `agent/SHA256SUMS` | 5 minutes |
 | `agent/<version>/` with the same files | 1 year, never changes |
 
-When an agent release changes the protocol or adds a feature the app relies on, set `AgentStore.latestVersion` in the app to the new version. The app then offers the update command on the agent's setup page.
+The app offers the agent in `agent/VERSION` as the latest one. `make build` writes it into the app's `Info.plist` as `RackpulseAgentVersion`, and servers with an older agent show an update notice with the command. So publish a new agent before the app release that should offer it. `make release` checks this: it stops if `$SITE_URL/agent/<agent version>/SHA256SUMS` does not exist yet.
+
+The app and the agent keep separate versions. A new app works with older agents and skips what they don't support, so an app release does not need a new agent.
 
 ## Checks after a release
 
