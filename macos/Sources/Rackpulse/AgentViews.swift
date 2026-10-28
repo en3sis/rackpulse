@@ -2,6 +2,14 @@ import AppKit
 import HetznerKit
 import SwiftUI
 
+enum AgentRoute: Hashable {
+    case tailscale, privateNetwork, publicIP, other
+
+    static let options: [(AgentRoute, String)] = [
+        (.tailscale, "Tailscale"), (.privateNetwork, "Private"), (.publicIP, "Public IP"), (.other, "Other"),
+    ]
+}
+
 struct AgentSetupView: View {
     let server: Server
     let project: Project
@@ -9,80 +17,76 @@ struct AgentSetupView: View {
     let firewalls: [Int64: String]
     let back: () -> Void
 
-    @State private var address: AgentAddress = .publicIPv4
+    @State private var route: AgentRoute = .publicIP
+    @State private var publicAddress: AgentAddress = .publicIPv4
+    @State private var tailnetHost = ""
     @State private var custom = ""
     @State private var port = String(AgentEndpoint.defaultPort)
     @State private var copied: String?
     @State private var tries = 0
+    @State private var showsFacts = false
+    @State private var editing = false
+    @State private var removing = false
+    @State private var onlyThisMac = false
+    @State private var macAddress: String?
+    @State private var lookingUp = false
+    @State private var macOnTailscale = MacNetwork.onTailscale
 
     private var store: AgentStore { monitor.agents }
     private var link: AgentLink? { store.link(project.id, server.id) }
     private var state: AgentState? { store.state(project.id, server.id) }
+    private var paired: Bool { link?.isPaired == true }
     private var portNumber: Int { Int(port).flatMap { (1...65_535).contains($0) ? $0 : nil } ?? AgentEndpoint.defaultPort }
-    private var host: String { address == .custom ? custom.trimmingCharacters(in: .whitespaces) : address.host(for: server) ?? "" }
-    private var addresses: [AgentAddress] { AgentAddress.allCases.filter { $0 == .custom || $0.host(for: server) != nil } }
+    private var publicAddresses: [AgentAddress] { [.publicIPv4, .publicIPv6].filter { $0.host(for: server) != nil } }
+    private var stuck: Bool { !paired && tries >= 10 && state?.problem != nil }
+
+    private var address: AgentAddress {
+        switch route {
+        case .tailscale: .tailscale
+        case .privateNetwork: .privateNetwork
+        case .publicIP: publicAddress
+        case .other: .custom
+        }
+    }
+
+    private var host: String {
+        switch route {
+        case .tailscale: tailnetHost.trimmingCharacters(in: .whitespaces)
+        case .other: custom.trimmingCharacters(in: .whitespaces)
+        case .privateNetwork, .publicIP: address.host(for: server) ?? ""
+        }
+    }
+
+    private var command: String? {
+        guard !host.isEmpty else { return nil }
+        return store.installCommand(project.id, server.id, address: address, host: host, port: portNumber)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Text("Rackpulse works without the agent. Install it on this server to also see memory, disk space, Docker containers, and 30 days of uptime recorded on the server.")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-
-            SectionHeader("How it works").padding(.top, 16)
-            facts.padding(.horizontal, 16)
-
-            if link?.isPaired == true {
-                SectionHeader("Status").padding(.top, 18)
-                status.padding(.horizontal, 16)
-                SectionHeader("Key").padding(.top, 18)
-                keyStep.padding(.horizontal, 16)
-                if let version = link?.version, version.compare(AgentStore.latestVersion, options: .numeric) == .orderedAscending {
-                    SectionHeader("Update").padding(.top, 18)
-                    step("Agent \(AgentStore.latestVersion) is available. Run this on the server to update. It keeps the key and settings.") {
-                        code(AgentStore.updateCommand)
-                    }
-                    .padding(.horizontal, 16)
-                }
+            if paired && !editing {
+                connected
             } else {
-                SectionHeader("1. Address").padding(.top, 18)
-                addressStep.padding(.horizontal, 16)
-                SectionHeader("2. Open the port").padding(.top, 18)
-                firewallStep.padding(.horizontal, 16)
-                SectionHeader("3. Run on the server").padding(.top, 18)
-                installStep.padding(.horizontal, 16)
-                status.padding(.horizontal, 16).padding(.top, 10)
-            }
-
-            SectionHeader("Remove").padding(.top, 18)
-            step("Run this on the server to remove the agent, its user and its data. Then remove the firewall rule.") {
-                code("sudo rackpulse-agent uninstall")
-            }
-            .padding(.horizontal, 16)
-            if link != nil {
-                Button("Remove agent from Rackpulse", role: .destructive) {
-                    store.remove(project.id, server.id)
-                    back()
-                }
-                .buttonStyle(.link)
-                .font(.system(size: 12))
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+                setup
             }
             Color.clear.frame(height: 14)
         }
+        .padding(.horizontal, 16)
         .onExitCommand(perform: back)
         .onAppear(perform: load)
-        .onChange(of: address) { save() }
+        .onChange(of: route) { save() }
+        .onChange(of: publicAddress) { save() }
+        .onChange(of: tailnetHost) { save() }
         .onChange(of: custom) { save() }
         .onChange(of: port) { save() }
+        .onChange(of: onlyThisMac) { lookUpMac() }
         .task(id: link?.endpoint) {
+            tries = 0
             while !Task.isCancelled, link.map({ !$0.isPaired }) ?? false {
                 await store.tryPair(project.id, server: server.id)
                 tries += 1
+                macOnTailscale = MacNetwork.onTailscale
                 try? await Task.sleep(for: .seconds(3))
             }
         }
@@ -101,35 +105,375 @@ struct AgentSetupView: View {
             .accessibilityLabel("Back to \(server.name)")
             .keyboardShortcut("[", modifiers: .command)
             VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    Text("Rackpulse agent").font(.system(size: 14, weight: .semibold))
-                    Text("OPTIONAL")
-                        .font(.system(size: 9, weight: .bold))
-                        .tracking(0.4)
-                        .foregroundStyle(Theme.secondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Theme.card, in: Capsule())
-                }
+                Text(paired ? (editing ? "Change address" : "Agent") : "Set up the agent")
+                    .font(.system(size: 14, weight: .semibold))
                 Text(server.name).font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
+            if paired && !editing {
+                if state?.problem == nil {
+                    badge("Connected", Theme.green)
+                } else {
+                    badge("Not answering", Theme.orange)
+                }
+            } else if stuck {
+                badge("Not reachable", Theme.orange)
+            }
         }
-        .padding(.horizontal, 16)
         .padding(.top, 14)
     }
 
-    private var facts: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            fact("lock.shield", "Read-only. The agent cannot run commands or change anything on the server.")
-            fact("arrow.down.left.circle", "Your Mac connects to the agent over HTTPS on one TCP port. The server never connects to your Mac.")
-            fact("key", "Only Rackpulse with this server's key can read it. The key is stored in your Keychain, and Rackpulse checks the agent's certificate on every connection.")
-            fact("clock.arrow.circlepath", "It keeps 30 days of history on the server, so uptime and charts fill in after your Mac sleeps.")
-            fact("shippingbox", "To list containers it joins the docker group, which can control Docker. The agent only reads from Docker.")
+    private func badge(_ text: String, _ color: Color) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(text).font(.system(size: 11, weight: .medium))
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(color.opacity(0.14), in: Capsule())
+    }
+
+    @ViewBuilder
+    private var setup: some View {
+        if !paired {
+            Text("Adds memory, disk space, Docker containers and 30 days of uptime. The agent is read-only, and Rackpulse works without it.")
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
+            facts.padding(.top, 8)
+        }
+        title("How this Mac reaches \(server.name)")
+        SegmentedControl(selection: $route, options: AgentRoute.options)
+        routeDetails.padding(.top, 10)
+        if let command {
+            if route == .publicIP {
+                title("Allow the port")
+                firewallCard
+            }
+            title("Run on the server")
+            code(command, masked: true)
+            Text(commandNote)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+        }
+        if editing {
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Button("Cancel") { editing = false }
+                Button("Use this address") {
+                    store.move(project.id, server.id, address: address, host: host, port: portNumber)
+                    editing = false
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(host.isEmpty)
+            }
+            .controlSize(.small)
+            .padding(.top, 14)
+        } else if link != nil {
+            waiting.padding(.top, 14)
+            if stuck, let problem = state?.problem, let link { checks(problem, link) }
+        }
+    }
+
+    @ViewBuilder
+    private var routeDetails: some View {
+        switch route {
+        case .tailscale:
+            card {
+                if macOnTailscale {
+                    notice("checkmark.circle.fill", Theme.green, "Tailscale is on for this Mac",
+                           "The agent listens only on the server's Tailscale address. No Hetzner firewall rule is needed.")
+                } else {
+                    notice("exclamationmark.circle.fill", Theme.orange, "Tailscale is not running on this Mac",
+                           "Start Tailscale on this Mac. Rackpulse reaches \(server.name) through your tailnet.")
+                }
+                Divider()
+                field("Server") { TextField(server.name, text: $tailnetHost).frame(width: 180) }
+                field("Port") { portField }
+                caption("Its MagicDNS name or Tailscale IP address.")
+            }
+        case .privateNetwork:
+            card {
+                if let ip = AgentAddress.privateNetwork.host(for: server) {
+                    field("Address") { Text(ip).font(.system(size: 12, design: .monospaced)).textSelection(.enabled) }
+                    field("Port") { portField }
+                    caption("Your Mac must reach the private network, for example through a VPN server in it.")
+                } else {
+                    caption("\(server.name) is not in a Hetzner private network.")
+                }
+            }
+        case .publicIP:
+            card {
+                if publicAddresses.isEmpty {
+                    caption("\(server.name) has no public IP address.")
+                } else {
+                    field("Address") {
+                        Picker("Address", selection: $publicAddress) {
+                            ForEach(publicAddresses) { option in
+                                Text("\(option == .publicIPv4 ? "IPv4" : "IPv6")  \(option.host(for: server) ?? "")").tag(option)
+                            }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                    field("Port") { portField }
+                }
+            }
+        case .other:
+            card {
+                field("Address") { TextField("10.8.0.5 or web-1.vpn.example", text: $custom).frame(width: 200) }
+                field("Port") { portField }
+                caption("A VPN or other address this Mac can reach.")
+            }
+        }
+    }
+
+    private var portField: some View {
+        TextField("7311", text: $port).frame(width: 70).help("TCP port, 7311 by default")
+    }
+
+    private var commandNote: String {
+        let scope = switch route {
+        case .tailscale: "The agent listens only on the server's Tailscale address, and the installer allows the port on tailscale0 if ufw is active."
+        case .privateNetwork: "The agent listens only on the private address, and the installer allows the port in ufw if it is active."
+        case .publicIP: "The installer opens the port in ufw if it is active."
+        case .other: "The installer allows the port in ufw if it is active."
+        }
+        return "Copy includes the hidden key. \(scope)"
+    }
+
+    private var firewallCard: some View {
+        let attached = (server.publicNet.firewalls ?? []).compactMap { ref in ref.id.map { firewalls[$0] ?? "#\($0)" } }
+        return card {
+            HStack(spacing: 8) {
+                Image(systemName: "shield.lefthalf.filled").foregroundStyle(Theme.secondary).frame(width: 16)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(attached.isEmpty ? "No Hetzner Cloud Firewall" : attached.joined(separator: ", "))
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(attached.isEmpty
+                         ? "Port \(portNumber) is open to the internet once the agent runs."
+                         : "Add an inbound rule: TCP \(portNumber)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    NSWorkspace.shared.open(firewallsURL)
+                } label: {
+                    Label(attached.isEmpty ? "Add a firewall" : "Open in Console", systemImage: "arrow.up.right")
+                }
+                .controlSize(.small)
+            }
+            Divider()
+            HStack(spacing: 8) {
+                Image(systemName: "laptopcomputer").foregroundStyle(Theme.secondary).frame(width: 16)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Only from this Mac").font(.system(size: 12))
+                    Text(sourceText)
+                        .font(.system(size: 11, design: onlyThisMac && macAddress != nil ? .monospaced : .default))
+                        .foregroundStyle(Theme.secondary)
+                        .textSelection(.enabled)
+                }
+                Spacer(minLength: 0)
+                Toggle("Only from this Mac", isOn: $onlyThisMac)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+            }
+        }
+    }
+
+    private var sourceText: String {
+        guard onlyThisMac else { return "Source: any address" }
+        if let macAddress { return "Source \(macAddress)/\(macAddress.contains(":") ? 128 : 32)" }
+        return lookingUp ? "Finding this Mac's public address…" : "Could not find this Mac's public address"
+    }
+
+    private var waiting: some View {
+        card {
+            HStack(spacing: 10) {
+                ProgressView().controlSize(.small)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Waiting for the agent").font(.system(size: 12, weight: .semibold))
+                    Text("\(link?.endpoint.display ?? host) · checking every 3 seconds")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private enum Check { case passed, failed, unknown }
+
+    @ViewBuilder
+    private func checks(_ problem: AgentProblem, _ link: AgentLink) -> some View {
+        let unreachable = [AgentProblem.agent(.timedOut), .agent(.unreachable), .agent(.invalidAddress)].contains(problem)
+        title("Checks")
+        card {
+            checkRow(server.status == .running ? .passed : .failed, "Server is running")
+            Divider()
+            checkRow(unreachable ? .failed : .passed, "This Mac reaches \(link.endpoint.display)") {
+                if unreachable && route == .publicIP {
+                    Button("Open firewall") { NSWorkspace.shared.open(firewallsURL) }.controlSize(.small)
+                }
+            }
+            Divider()
+            checkRow(unreachable ? .unknown : .failed, "The agent answers")
+            Text(problem.text(link))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        title("On the server")
+        code("sudo rackpulse-agent status", masked: false)
+        caption("Shows whether the agent runs and which address and port it listens on.").padding(.top, 6)
+        if route != .tailscale {
+            HStack(spacing: 4) {
+                Text("Is \(server.name) on a tailnet?").foregroundStyle(Theme.secondary)
+                Button("Use Tailscale instead") { route = .tailscale }.buttonStyle(.link)
+            }
+            .font(.system(size: 12))
+            .padding(.top, 12)
+        }
+    }
+
+    private func checkRow(_ check: Check, _ text: String, @ViewBuilder action: () -> some View = { EmptyView() }) -> some View {
+        HStack(spacing: 8) {
+            switch check {
+            case .passed: Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.green).frame(width: 16)
+            case .failed: Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.red).frame(width: 16)
+            case .unknown: Image(systemName: "circle.dashed").foregroundStyle(Theme.secondary).frame(width: 16)
+            }
+            Text(text).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
+            Spacer(minLength: 0)
+            action()
+        }
+        .frame(minHeight: 22)
+    }
+
+    @ViewBuilder
+    private var connected: some View {
+        if let link {
+            card {
+                row("Connection", link.address.title)
+                Divider()
+                row("Address", link.endpoint.display)
+                if let version = link.version {
+                    Divider()
+                    row("Version", version)
+                }
+                if let seen = state?.seen {
+                    Divider()
+                    row("Last report", Format.ago(seen, now: .now))
+                }
+                if let pairedAt = link.pairedAt {
+                    Divider()
+                    row("Paired", pairedAt.formatted(date: .abbreviated, time: .omitted))
+                }
+            }
+            .padding(.top, 14)
+            if let problem = state?.problem {
+                card(tint: Theme.orange) {
+                    notice("exclamationmark.triangle.fill", Theme.orange, "The agent is not answering", problem.text(link))
+                    if problem == .agent(.certificateChanged) {
+                        Button("Pair again") { store.pairAgain(project.id, server.id) }.controlSize(.small)
+                    }
+                }
+                .padding(.top, 10)
+            }
+            if link.isRotating, let command = store.rotationCommand(project.id, server.id) {
+                rotation(command)
+            } else if store.needsUpdate(project.id, server.id) {
+                card(tint: Theme.info) {
+                    notice("arrow.up.circle.fill", Theme.info, "Agent \(AgentStore.latestVersion) is available",
+                           "Run this on the server. It keeps the key and settings.")
+                    code(AgentStore.updateCommand, masked: false)
+                }
+                .padding(.top, 10)
+            }
+            facts.padding(.top, 14)
+            if removing {
+                removal
+            } else {
+                HStack(spacing: 8) {
+                    Button("Change key") { store.startRotation(project.id, server.id) }
+                        .disabled(link.isRotating)
+                    Button("Change address") {
+                        apply(link)
+                        editing = true
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        removing = true
+                    } label: {
+                        Text("Remove agent…").foregroundStyle(Theme.red)
+                    }
+                }
+                .controlSize(.small)
+                .padding(.top, 16)
+            }
+        }
+    }
+
+    private func rotation(_ command: String) -> some View {
+        card {
+            notice("key.fill", Theme.secondary, "New key",
+                   "Run this on the server. It installs a new key and updates the agent. The old key stops working as soon as it runs.")
+            code(command, masked: true)
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Waiting for the agent to use the new key…").font(.system(size: 12, weight: .semibold))
+                Spacer(minLength: 0)
+                Button("Cancel") { store.cancelRotation(project.id, server.id) }.controlSize(.small)
+            }
+        }
+        .padding(.top, 10)
+        .task(id: link?.isRotating) {
+            while !Task.isCancelled, link?.isRotating == true {
+                await store.tryRotation(project.id, server: server.id)
+                try? await Task.sleep(for: .seconds(3))
+            }
+        }
+    }
+
+    private var removal: some View {
+        card(tint: Theme.red) {
+            notice("trash", Theme.red, "Remove the agent",
+                   "Run this on the server to remove the agent, its user, its data and its ufw rule. Then remove any Hetzner firewall rule for the port.")
+            code("sudo rackpulse-agent uninstall", masked: false)
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Button("Cancel") { removing = false }
+                Button(role: .destructive) {
+                    store.remove(project.id, server.id)
+                    back()
+                } label: {
+                    Text("Remove from Rackpulse").foregroundStyle(Theme.red)
+                }
+            }
+            .controlSize(.small)
+        }
+        .padding(.top, 16)
+    }
+
+    private var facts: some View {
+        DisclosureGroup(isExpanded: $showsFacts) {
+            VStack(alignment: .leading, spacing: 7) {
+                fact("lock.shield", "Read-only. The agent cannot run commands or change anything on the server.")
+                fact("arrow.down.left.circle", "Your Mac connects to the agent over HTTPS on one TCP port. The server never connects to your Mac.")
+                fact("key", "Only Rackpulse with this server's key can read it. The key is stored in your Keychain, and Rackpulse checks the agent's certificate on every connection.")
+                fact("clock.arrow.circlepath", "It keeps 30 days of history on the server, so uptime and charts fill in after your Mac sleeps.")
+                fact("shippingbox", "To list containers it joins the docker group, which can control Docker. The agent only reads from Docker.")
+            }
+            .padding(.top, 6)
+        } label: {
+            Text("How it works").font(.system(size: 12, weight: .medium))
+        }
     }
 
     private func fact(_ icon: String, _ text: String) -> some View {
@@ -137,179 +481,68 @@ struct AgentSetupView: View {
             Image(systemName: icon).foregroundStyle(Theme.secondary).frame(width: 16)
             Text(text).fixedSize(horizontal: false, vertical: true)
         }
-        .font(.system(size: 12))
+        .font(.system(size: 11.5))
     }
 
-    private var addressStep: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Where Rackpulse reaches the agent from this Mac.")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.secondary)
-            HStack(spacing: 8) {
-                Picker("Address", selection: $address) {
-                    ForEach(addresses) { option in
-                        Text(option.title).tag(option)
-                    }
-                }
-                .labelsHidden()
-                .frame(maxWidth: .infinity)
-                TextField("Port", text: $port)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 64)
-                    .help("TCP port, 7311 by default")
-            }
-            if address == .custom {
-                TextField("100.101.102.103 or web-1.tailnet.ts.net", text: $custom)
-                    .textFieldStyle(.roundedBorder)
-                Text("For example the server's Tailscale or VPN address.")
+    private func title(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 11, weight: .semibold))
+            .tracking(0.6)
+            .foregroundStyle(Theme.secondary)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 16)
+            .padding(.bottom, 6)
+    }
+
+    private func card(tint: Color? = nil, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 8) { content() }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tint.map { $0.opacity(0.12) } ?? Theme.card, in: RoundedRectangle(cornerRadius: 9))
+    }
+
+    private func notice(_ icon: String, _ color: Color, _ heading: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon).foregroundStyle(color).frame(width: 16)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(heading).font(.system(size: 12, weight: .semibold))
+                Text(detail)
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    private var firewallStep: some View {
-        let attached = (server.publicNet.firewalls ?? []).compactMap { ref in ref.id.map { firewalls[$0] ?? "#\($0)" } }
-        let portText = String(portNumber)
-        return VStack(alignment: .leading, spacing: 8) {
-            if address.isPublic {
-                if attached.isEmpty {
-                    Text("This server has no Hetzner Cloud Firewall, so the port is open to the internet once the agent runs. To limit who can reach it, add a firewall with an inbound rule for TCP port \(portText).")
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text("This server uses the firewall \(attached.joined(separator: ", ")). In the Hetzner Console, add an inbound rule: TCP, port \(portText). If your Mac has a fixed IP address, set it as the source.")
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Button(attached.isEmpty ? "Open firewalls in the Console" : "Open firewall in the Console") {
-                    NSWorkspace.shared.open(firewallsURL)
-                }
-                .controlSize(.small)
-                Text("If ufw is active on the server, also run:").foregroundStyle(Theme.secondary)
-                code("sudo ufw allow \(portText)/tcp")
-            } else {
-                Text("No public firewall rule is needed. If ufw is active on the server, allow the port on the private interface:")
-                    .fixedSize(horizontal: false, vertical: true)
-                code(address == .privateNetwork
-                     ? "sudo ufw allow from 10.0.0.0/8 to any port \(portText) proto tcp"
-                     : "sudo ufw allow in on tailscale0 to any port \(portText) proto tcp")
-            }
+    private func field(_ label: String, @ViewBuilder content: () -> some View) -> some View {
+        HStack {
+            Text(label).font(.system(size: 12))
+            Spacer(minLength: 8)
+            content().textFieldStyle(.roundedBorder).font(.system(size: 12))
+        }
+    }
+
+    private func row(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).foregroundStyle(Theme.secondary)
+            Spacer(minLength: 8)
+            Text(value).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
         }
         .font(.system(size: 12))
     }
 
-    private var installStep: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Run as root or with sudo. It downloads the agent for the server's CPU, checks its checksum, and starts it as a service.")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if let command = store.installCommand(project.id, server.id), !host.isEmpty {
-                code(command)
-                Text("The command contains this server's key. It starts with a space so bash does not save it in the shell history. Don't share it or screenshots of it.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.secondary)
-            } else {
-                Text("Enter an address first.").font(.system(size: 12)).foregroundStyle(Theme.orange)
-            }
-        }
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
-    @ViewBuilder
-    private var keyStep: some View {
-        if link?.isRotating == true, let command = store.rotationCommand(project.id, server.id) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Run this on the server. It installs a new key and updates the agent. The old key stops working as soon as it runs.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                code(command)
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Waiting for the agent to use the new key…").font(.system(size: 12, weight: .semibold))
-                    Spacer(minLength: 0)
-                    Button("Cancel") { store.cancelRotation(project.id, server.id) }.controlSize(.small)
-                }
-                .padding(10)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
-            }
-            .task(id: link?.isRotating) {
-                while !Task.isCancelled, link?.isRotating == true {
-                    await store.tryRotation(project.id, server: server.id)
-                    try? await Task.sleep(for: .seconds(3))
-                }
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Each server has its own key. Change it if the install command or a screenshot of it was shared. Whoever has the key can read this server's agent data, but cannot change anything.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Change key") { store.startRotation(project.id, server.id) }
-                    .controlSize(.small)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var status: some View {
-        let place = link?.place ?? "port \(portNumber)"
+    private func code(_ text: String, masked: Bool) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            if link?.isPaired == true {
-                Image(systemName: state?.problem == nil ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(state?.problem == nil ? Theme.green : Theme.orange)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Connected at \(place)").font(.system(size: 12, weight: .semibold))
-                    Text(pairedDetail).font(.system(size: 11)).foregroundStyle(Theme.secondary)
-                    if let problem = state?.problem, let link {
-                        Text(problem.text(link)).font(.system(size: 11)).foregroundStyle(Theme.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if problem == .agent(.certificateChanged) {
-                            Button("Pair again") { store.pairAgain(project.id, server.id) }.controlSize(.small)
-                        }
-                    }
-                }
-            } else {
-                ProgressView().controlSize(.small)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Waiting for the agent at \(place)…").font(.system(size: 12, weight: .semibold))
-                    if let problem = state?.problem, let link, tries > 1 {
-                        Text(problem.text(link)).font(.system(size: 11)).foregroundStyle(Theme.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        Text("Rackpulse checks every few seconds while this page is open.")
-                            .font(.system(size: 11)).foregroundStyle(Theme.secondary)
-                    }
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(10)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
-    }
-
-    private var pairedDetail: String {
-        var parts: [String] = []
-        if let version = link?.version { parts.append("Agent \(version)") }
-        if let seen = state?.seen { parts.append("last report \(Format.ago(seen, now: .now))") }
-        if let paired = link?.pairedAt { parts.append("paired \(paired.formatted(date: .abbreviated, time: .omitted))") }
-        return parts.joined(separator: " · ")
-    }
-
-    private func step(_ text: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(text)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            content()
-        }
-    }
-
-    private func code(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text(text)
+            Text(masked ? AgentStore.masked(text) : text)
                 .font(.system(size: 11, design: .monospaced))
-                .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button {
@@ -321,14 +554,9 @@ struct AgentSetupView: View {
                     if copied == text { copied = nil }
                 }
             } label: {
-                Image(systemName: copied == text ? "checkmark" : "doc.on.doc")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(copied == text ? Theme.green : Theme.secondary)
-                    .frame(width: 20, height: 20)
-                    .contentShape(Rectangle())
+                Label(copied == text ? "Copied" : "Copy", systemImage: copied == text ? "checkmark" : "doc.on.doc")
             }
-            .buttonStyle(.plain)
-            .help("Copy")
+            .controlSize(.small)
         }
         .padding(8)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 7))
@@ -339,19 +567,45 @@ struct AgentSetupView: View {
         return URL(string: "https://console.hetzner.com/projects/\(id)/firewalls")!
     }
 
+    private func lookUpMac() {
+        guard onlyThisMac, macAddress == nil, !lookingUp else { return }
+        lookingUp = true
+        Task {
+            macAddress = await MacNetwork.publicAddress()
+            lookingUp = false
+        }
+    }
+
     private func load() {
+        tailnetHost = server.name
+        publicAddress = publicAddresses.first ?? .publicIPv4
         if let link {
-            address = link.address
-            port = String(link.endpoint.port)
-            if link.address == .custom { custom = link.endpoint.host }
+            apply(link)
         } else {
-            address = addresses.first ?? .custom
+            route = macOnTailscale ? .tailscale : publicAddresses.isEmpty ? .other : .publicIP
             save()
         }
     }
 
+    private func apply(_ link: AgentLink) {
+        port = String(link.endpoint.port)
+        switch link.address {
+        case .publicIPv4, .publicIPv6:
+            route = .publicIP
+            publicAddress = link.address
+        case .tailscale:
+            route = .tailscale
+            tailnetHost = link.endpoint.host
+        case .privateNetwork:
+            route = .privateNetwork
+        case .custom:
+            route = .other
+            custom = link.endpoint.host
+        }
+    }
+
     private func save() {
-        guard link?.isPaired != true, !host.isEmpty else { return }
+        guard !paired, !host.isEmpty else { return }
         store.prepare(project.id, server: server.id, address: address, host: host, port: portNumber)
     }
 }

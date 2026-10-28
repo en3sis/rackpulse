@@ -9,7 +9,7 @@ const (
 
 const unitFile = `[Unit]
 Description=Rackpulse agent
-After=network-online.target docker.service
+After=network-online.target docker.service tailscaled.service
 Wants=network-online.target
 
 [Service]

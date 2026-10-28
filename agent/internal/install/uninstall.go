@@ -15,10 +15,12 @@ func Uninstall() error {
 	if err := requireRoot(); err != nil {
 		return err
 	}
+	cfg, cfgErr := config.Load(config.Path)
 	port := config.DefaultPort
-	if cfg, err := config.Load(config.Path); err == nil {
+	if cfgErr == nil {
 		port = cfg.Port
 	}
+	ufwRemoved := cfgErr == nil && ufwActive() && removeFromUFW(cfg)
 	exec.Command("systemctl", "disable", "--now", serviceName).Run()
 	removed := false
 	if err := os.Remove(unitPath); err == nil {
@@ -51,6 +53,9 @@ func Uninstall() error {
 		return errors.New(strings.Join(problems, "\n"))
 	}
 	fmt.Println("Rackpulse agent is removed.")
-	fmt.Printf("Remove the firewall rule for TCP port %d yourself if you added one.\n", port)
+	if ufwRemoved {
+		fmt.Printf("Removed the ufw rule for TCP port %d.\n", port)
+	}
+	fmt.Printf("Remove the Hetzner Cloud Firewall rule for TCP port %d yourself if you added one.\n", port)
 	return nil
 }

@@ -23,7 +23,7 @@ curl -fsSL https://rackpulse.app/agent/install.sh | sudo sh -s -- --pair rb1_...
 |---|---|---|
 | `--pair <key>` | | The pairing key. Required on the first install. Pass it again to pair with another Mac; the old key stops working |
 | `--port <port>` | `7311` | TCP port |
-| `--listen <ip>` | all addresses | Listen only on this address, for example a Tailscale or private network IP |
+| `--listen <ip>` | all addresses | Listen only on this address, for example a private network IP. `--listen tailscale` uses the server's Tailscale IPv4 address |
 
 Running the script again without `--pair` updates the agent and keeps its key and settings.
 
@@ -35,7 +35,8 @@ The script downloads the binary for the server's architecture from `rackpulse.ap
 4. Creates a self-signed TLS certificate in `/var/lib/rackpulse-agent`.
 5. Reads past boots from the system journal, so the uptime history starts with the last 30 days.
 6. Installs and starts `rackpulse-agent.service`.
-7. Prints the firewall rule to add.
+7. If ufw is active, allows the port: on `tailscale0` for a Tailscale address, to the listen address for another address, or on all addresses. `rackpulse-agent uninstall` removes the rule again.
+8. Prints the firewall rule to add outside the server.
 
 ## Firewall
 
@@ -43,8 +44,9 @@ Rackpulse must reach the port from your Mac.
 
 | Address Rackpulse uses | What to open |
 |---|---|
-| Public IPv4 or IPv6 | Hetzner Cloud Firewall attached to the server: inbound rule, TCP, port 7311. If you have a fixed IP, set it as the source. If ufw is active on the server: `sudo ufw allow 7311/tcp` |
-| Tailscale or other VPN address | No public rule. If ufw is active: `sudo ufw allow in on tailscale0 to any port 7311 proto tcp` |
+| Public IPv4 or IPv6 | Hetzner Cloud Firewall attached to the server: inbound rule, TCP, port 7311. If you have a fixed IP, set it as the source. The installer adds the ufw rule |
+| Tailscale (`--listen tailscale`) | No public rule. The installer allows the port on `tailscale0` in ufw |
+| Other VPN address | No public rule. The installer allows the port to that address in ufw |
 | Hetzner private network | No public rule. Your Mac must reach the private network, for example through a VPN server in it |
 
 A server without a Cloud Firewall and without ufw accepts the connection on all addresses.

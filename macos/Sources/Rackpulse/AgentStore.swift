@@ -3,7 +3,7 @@ import HetznerKit
 import Observation
 
 enum AgentAddress: String, Codable, CaseIterable, Identifiable {
-    case publicIPv4, publicIPv6, privateNetwork, custom
+    case publicIPv4, publicIPv6, tailscale, privateNetwork, custom
 
     var id: String { rawValue }
 
@@ -11,6 +11,7 @@ enum AgentAddress: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .publicIPv4: "Public IPv4"
         case .publicIPv6: "Public IPv6"
+        case .tailscale: "Tailscale"
         case .privateNetwork: "Private network"
         case .custom: "Other address"
         }
@@ -22,6 +23,7 @@ enum AgentAddress: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .publicIPv4: server.publicNet.ipv4?.ip
         case .publicIPv6: server.publicNet.ipv6.map { $0.ip.replacingOccurrences(of: "::/64", with: "::1") }
+        case .tailscale: server.name
         case .privateNetwork: server.privateNet?.first?.ip
         case .custom: nil
         }
@@ -44,7 +46,7 @@ struct AgentLink: Codable, Hashable {
         case .publicIPv4: "the public IPv4 address, port \(endpoint.port)"
         case .publicIPv6: "the public IPv6 address, port \(endpoint.port)"
         case .privateNetwork: "the private network address, port \(endpoint.port)"
-        case .custom: endpoint.display
+        case .tailscale, .custom: endpoint.display
         }
     }
 }
@@ -151,6 +153,15 @@ final class AgentStore {
         return Self.command(link: link, token: token)
     }
 
+    func installCommand(_ project: UUID, _ server: Int64, address: AgentAddress, host: String, port: Int) -> String? {
+        guard let token = token(project, server) else { return nil }
+        return Self.command(link: AgentLink(address: address, endpoint: AgentEndpoint(host: host, port: port)), token: token)
+    }
+
+    static func masked(_ command: String) -> String {
+        command.replacing(/rb1_[A-Za-z0-9_-]+/, with: "rb1_••••••••")
+    }
+
     func rotationCommand(_ project: UUID, _ server: Int64) -> String? {
         let key = Self.key(project, server)
         guard let link = links[key], link.isRotating, let token = token(Self.nextKey(key)) else { return nil }
@@ -164,7 +175,11 @@ final class AgentStore {
     private static func command(link: AgentLink, token: String) -> String {
         var command = " curl -fsSL \(installURL) | sudo sh -s -- --pair \(token)"
         if link.endpoint.port != AgentEndpoint.defaultPort { command += " --port \(link.endpoint.port)" }
-        if !link.address.isPublic, isIPAddress(link.endpoint.host) { command += " --listen \(link.endpoint.host)" }
+        if link.address == .tailscale {
+            command += " --listen tailscale"
+        } else if !link.address.isPublic, isIPAddress(link.endpoint.host) {
+            command += " --listen \(link.endpoint.host)"
+        }
         return command
     }
 
@@ -220,6 +235,17 @@ final class AgentStore {
         link.address = address
         link.endpoint = endpoint
         links[key] = link
+        clients[key] = nil
+        states[key]?.problem = nil
+        states[key]?.failures = 0
+        persist()
+    }
+
+    func move(_ project: UUID, _ server: Int64, address: AgentAddress, host: String, port: Int) {
+        let key = Self.key(project, server)
+        guard links[key] != nil else { return }
+        links[key]?.address = address
+        links[key]?.endpoint = AgentEndpoint(host: host.trimmingCharacters(in: .whitespacesAndNewlines), port: port)
         clients[key] = nil
         states[key]?.problem = nil
         states[key]?.failures = 0

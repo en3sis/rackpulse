@@ -17,7 +17,8 @@ Commands:
   install      Install or update the agent and its service
                --pair <key>   Pairing key from Rackpulse
                --port <port>  TCP port (default 7311)
-               --listen <ip>  Listen only on this address
+               --listen <ip>  Listen only on this address, or tailscale
+                              for this server's Tailscale address
   set-key      Replace the pairing key, from an argument or stdin
   uninstall    Stop the service and remove the agent
   status       Show the service state
