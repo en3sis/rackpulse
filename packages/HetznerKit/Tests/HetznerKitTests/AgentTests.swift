@@ -34,6 +34,13 @@ struct AgentTests {
         #expect(history.hours[1_761_476_400] == 60)
     }
 
+    @Test func stoppedContainersAreNeverUnhealthy() {
+        let running = AgentSnapshot.Container(id: "1", name: "api", image: "x", state: "running", health: "unhealthy")
+        let stopped = AgentSnapshot.Container(id: "2", name: "api.old", image: "x", state: "exited", health: "unhealthy")
+        #expect(running.isUnhealthy)
+        #expect(!stopped.isUnhealthy)
+    }
+
     @Test func timelinePrefersAgentThenRackpulseThenHetzner() {
         let created = date("2026-10-20T00:00:00Z")
         let now = date("2026-10-26T10:30:00Z")

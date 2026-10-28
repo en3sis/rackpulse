@@ -246,7 +246,7 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
         public static let stopSignals: Set<Int> = [0, 130, 137, 143]
 
         public var isRunning: Bool { state == "running" }
-        public var isUnhealthy: Bool { health == "unhealthy" }
+        public var isUnhealthy: Bool { isRunning && health == "unhealthy" }
         public var isRestartLoop: Bool { state == "restarting" || restartsLastHour >= 3 }
 
         public func crashed(within interval: TimeInterval, now: Date) -> Bool {
