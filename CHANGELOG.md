@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.0
+
+### App
+
+- Each alert notifies once, also after Rackpulse restarts. Alert state and a log of sent notifications are kept in a local database.
+- Many alerts at once arrive as one notification. Alerts during quiet hours arrive as one summary when they end.
+- Choose per rule between a notification, a daily summary, or the popover only. Set the summary time in Settings, Alerts.
+- Stopped Docker containers no longer count as unhealthy.
+- A new agent setup: choose how your Mac reaches the server (Tailscale, private network, public IP, or another address) and get the matching command and firewall steps. The pairing key is hidden in the command. Change a paired agent's address without pairing again.
+- Agent data shows right after Rackpulse starts, instead of after the first check interval.
+- While a server's page is open, its agent is read every 5 seconds.
+
+### Agent
+
+- `--listen tailscale` listens on the server's Tailscale address.
+- If ufw is active, the installer allows the agent's port, and uninstall removes the rule.
+
 ## 0.2.2
 
 ### App

@@ -100,6 +100,28 @@ The app offers the agent in `agent/VERSION` as the latest one. `make build` writ
 
 The app and the agent keep separate versions. A new app works with older agents and skips what they don't support, so an app release does not need a new agent.
 
+## Compatibility rules
+
+Users go back to older versions, and servers run older agents. Every change keeps both working.
+
+| Area | Rule |
+|---|---|
+| Database (`rackpulse.sqlite`) | A new schema version only adds tables or columns, in its own `version < N` step. Never rename or drop |
+| Settings | New fields are optional with a default. An older app must read settings written by a newer one |
+| New enum values | Avoid them in saved settings, or decode unknown values to a fallback. Today 0.2.2 resets all alert settings when a rule uses `digest` |
+| Agent API | Only add fields. The app treats missing fields as unsupported |
+| Agent flags | Publish the agent before the app shows a command that uses a new flag |
+
+## Nightly builds (planned)
+
+Not set up yet. The plan:
+
+- `make nightly` publishes a signed build of `main` to `appcast-nightly.xml` and `download/nightly/`. The stable feed and `make release` stay unchanged.
+- Version: the last stable version plus the build time, for example `0.2.2.202610281930`. Sparkle sorts it after 0.2.2 and before 0.2.3.
+- The agent from `main` goes to `agent/nightly/`. `agent/` changes only with a stable release.
+- Settings gets a Stable or Nightly choice. Leaving Nightly keeps the build until a newer stable version exists.
+- A stable release is a nightly that ran for about 3 days without problems.
+
 ## Checks after a release
 
 ```bash
