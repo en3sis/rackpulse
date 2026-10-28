@@ -290,7 +290,7 @@ final class AgentStore {
             let result = try await AgentClient.pair(endpoint: link.endpoint, token: token, timeout: 5)
             let client = AgentClient(endpoint: link.endpoint, token: token, fingerprint: result.fingerprint)
             let snapshot = try await client.snapshot().normalized()
-            if let other = snapshot.host.serverID, other != server {
+            if server > 0, let other = snapshot.host.serverID, other != server {
                 fail(key, .otherServer(other))
                 return
             }
@@ -354,7 +354,7 @@ final class AgentStore {
 
         for (key, id, result) in results {
             switch result {
-            case .success(let snapshot) where snapshot.host.serverID.map({ $0 != id }) ?? false:
+            case .success(let snapshot) where id > 0 && snapshot.host.serverID.map({ $0 != id }) ?? false:
                 fail(key, .otherServer(snapshot.host.serverID ?? 0))
             case .success(let snapshot):
                 states[key] = AgentState(snapshot: snapshot, seen: .now)
@@ -382,7 +382,7 @@ final class AgentStore {
         refreshing.insert(key)
         defer { refreshing.remove(key) }
         guard let snapshot = try? await client.snapshot().normalized(),
-              snapshot.host.serverID.map({ $0 == server }) ?? true,
+              server < 0 || snapshot.host.serverID.map({ $0 == server }) ?? true,
               links[key]?.endpoint == link.endpoint
         else { return }
         states[key] = AgentState(snapshot: snapshot, seen: .now)

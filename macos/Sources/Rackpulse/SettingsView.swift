@@ -17,7 +17,9 @@ struct SettingsView: View {
 
     @State private var page: SettingsPage? = .general
     @State private var adding = false
+    @State private var addingTo: UUID?
     @State private var removing: Project?
+    @Environment(AppActions.self) private var actions
 
     private var selectedProject: Project? {
         if case .project(let id) = page { return store.project(id) }
@@ -56,8 +58,8 @@ struct SettingsView: View {
             .listStyle(.sidebar)
             .safeAreaInset(edge: .bottom) {
                 HStack(spacing: 2) {
-                    Button { adding = true } label: { Image(systemName: "plus").frame(width: 20, height: 20) }
-                        .help("Add a project")
+                    Button { addingTo = nil; adding = true } label: { Image(systemName: "plus").frame(width: 20, height: 20) }
+                        .help("Add servers")
                     Button { removing = selectedProject } label: { Image(systemName: "minus").frame(width: 20, height: 20) }
                         .disabled(selectedProject == nil)
                         .help("Remove the selected project")
@@ -77,9 +79,10 @@ struct SettingsView: View {
                 AboutPage(updates: updates)
             case .project(let id):
                 if let project = store.project(id) {
-                    ProjectForm(store: store, settings: settings, project: project,
+                    ProjectForm(store: store, monitor: monitor, settings: settings, project: project,
                                 servers: monitor.pollers[project.id]?.data.servers ?? [],
-                                reload: { monitor.reload(project.id) }) { removing = project }
+                                reload: { monitor.reload(project.id) },
+                                addServer: { addingTo = project.id; adding = true }) { removing = project }
                         .id(project.id)
                 } else {
                     ContentUnavailableView("No Project Selected", systemImage: "server.rack")
@@ -93,12 +96,17 @@ struct SettingsView: View {
         .onAppear(perform: showRequestedPage)
         .onChange(of: settings.requestedPage) { showRequestedPage() }
         .sheet(isPresented: $adding) {
-            OnboardingView(store: store, canCancel: true) { added in
+            OnboardingView(monitor: monitor, canCancel: true, agentProject: addingTo) { added in
                 adding = false
                 if added {
                     monitor.projectChanged()
                     page = store.selectedID.map(SettingsPage.project)
                 }
+            } openAgent: { project, server in
+                adding = false
+                page = .project(project)
+                actions.route = .agent(project, server)
+                actions.openPanel()
             }
             .frame(width: 400)
         }
@@ -108,12 +116,11 @@ struct SettingsView: View {
             presenting: removing
         ) { project in
             Button("Remove", role: .destructive) {
-                store.remove(project)
-                monitor.projectChanged()
+                monitor.removeProject(project)
                 page = .general
             }
-        } message: { _ in
-            Text("Rackpulse stops watching this project and deletes its token from your Keychain. Nothing changes on your servers or in the project itself.")
+        } message: { project in
+            Text(ProjectForm.removalText(project))
         }
     }
 }
@@ -557,17 +564,28 @@ private struct ServerAlertsSection: View {
 
 private struct ProjectForm: View {
     let store: ProjectStore
+    let monitor: Monitor
     let settings: SettingsStore
     let project: Project
     let servers: [Server]
+    let addServer: () -> Void
     let remove: () -> Void
 
     @State private var name: String
     @State private var replacing = false
     let reload: () -> Void
 
-    init(store: ProjectStore, settings: SettingsStore, project: Project, servers: [Server], reload: @escaping () -> Void, remove: @escaping () -> Void) {
+    static func removalText(_ project: Project) -> String {
+        project.hasAPI
+            ? "Rackpulse stops watching this project and deletes its token from your Keychain. Nothing changes on your servers or in the project itself."
+            : "Rackpulse stops watching these servers and deletes their pairing keys from your Keychain. The agents keep running until you run sudo rackpulse-agent uninstall on each server."
+    }
+
+    init(store: ProjectStore, monitor: Monitor, settings: SettingsStore, project: Project, servers: [Server], reload: @escaping () -> Void,
+         addServer: @escaping () -> Void, remove: @escaping () -> Void) {
         self.reload = reload
+        self.monitor = monitor
+        self.addServer = addServer
         self.store = store
         self.settings = settings
         self.project = project
@@ -632,6 +650,20 @@ private struct ProjectForm: View {
                 .font(.headline)
             }
 
+            if !project.hasAPI {
+                Section {
+                    ForEach(project.hosts) { host in
+                        AgentHostRow(project: project, host: host, monitor: monitor)
+                    }
+                    Button("Add Server…", action: addServer)
+                } header: {
+                    Text("Servers")
+                } footer: {
+                    Text("Servers that run the Rackpulse agent, with no provider API. Leave the name empty to use the server's hostname.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section {
                 if settings.value.showsCosts {
                     TextField("Monthly budget", value: Binding(
@@ -648,7 +680,9 @@ private struct ProjectForm: View {
                 Text("Costs")
             } footer: {
                 if settings.value.showsCosts {
-                    Text("Rackpulse shows the budget on the Costs tab and alerts you when the month's forecast goes above it. For a server on an older price, enter the monthly price you pay. Leave it empty to use the list price, shown in grey. Amounts are in the currency of \(project.provider.name)'s prices, without VAT.")
+                    Text(project.hasAPI
+                         ? "Rackpulse shows the budget on the Costs tab and alerts you when the month's forecast goes above it. For a server on an older price, enter the monthly price you pay. Leave it empty to use the list price, shown in grey. Amounts are in the currency of \(project.provider.name)'s prices, without VAT."
+                         : "Rackpulse shows the budget on the Costs tab and alerts you when the month's forecast goes above it. These servers have no list price: enter the monthly price you pay to include a server in Costs. Amounts are without VAT.")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -658,10 +692,12 @@ private struct ProjectForm: View {
             ServerAlertsSection(project: project, servers: servers, settings: settings)
 
             Section {
-                TextField("Console link", text: Binding(
-                    get: { project.consoleID.map { "https://console.hetzner.com/projects/\($0)" } ?? "" },
-                    set: { value in store.update(project.id) { $0.consoleID = Project.consoleID(from: value) } }
-                ), prompt: Text("Paste any Console address from this project"))
+                if project.hasAPI {
+                    TextField("Console link", text: Binding(
+                        get: { project.consoleID.map { "https://console.hetzner.com/projects/\($0)" } ?? "" },
+                        set: { value in store.update(project.id) { $0.consoleID = Project.consoleID(from: value) } }
+                    ), prompt: Text("Paste any Console address from this project"))
+                }
                 TextField("SSH user", text: Binding(
                     get: { project.sshUser },
                     set: { value in store.update(project.id) { $0.sshUser = value.trimmingCharacters(in: .whitespaces) } }
@@ -669,10 +705,13 @@ private struct ProjectForm: View {
             } header: {
                 Text("Quick access")
             } footer: {
-                Text("The Console link lets the Console button open each server directly; the API doesn't share the project's Console number. The SSH button opens Terminal with ssh user@address.")
+                Text(project.hasAPI
+                     ? "The Console link lets the Console button open each server directly; the API doesn't share the project's Console number. The SSH button opens Terminal with ssh user@address."
+                     : "The SSH button opens Terminal with ssh user@address, using the address the agent is paired on.")
                     .foregroundStyle(.secondary)
             }
 
+            if project.hasAPI {
             Section {
                 LabeledContent("Access", value: project.access.title)
                 LabeledContent("Added", value: project.addedAt.formatted(date: .abbreviated, time: .omitted))
@@ -686,6 +725,7 @@ private struct ProjectForm: View {
                      : "Read & write: Rackpulse can also start, shut down, reboot and power off servers. Each action asks you to confirm. Replace it with a Read token to turn controls off.")
                     .foregroundStyle(.secondary)
             }
+            }
 
             Section {
                 Button(role: .destructive, action: remove) {
@@ -694,7 +734,7 @@ private struct ProjectForm: View {
             } header: {
                 Text("Remove project")
             } footer: {
-                Text("Rackpulse stops watching this project and deletes its token from your Keychain. Nothing changes on your servers or in the project itself.")
+                Text(Self.removalText(project))
                     .foregroundStyle(.secondary)
             }
         }
@@ -765,6 +805,54 @@ private struct ReplaceTokenView: View {
             } catch {
                 message = "The token could not be saved to the Keychain."
             }
+        }
+    }
+}
+
+private struct AgentHostRow: View {
+    let project: Project
+    let host: AgentHost
+    let monitor: Monitor
+
+    @State private var name: String
+    @State private var confirming = false
+
+    init(project: Project, host: AgentHost, monitor: Monitor) {
+        self.project = project
+        self.host = host
+        self.monitor = monitor
+        _name = State(initialValue: host.name ?? "")
+    }
+
+    var body: some View {
+        LabeledContent {
+            HStack(spacing: 6) {
+                TextField("Name", text: $name, prompt: Text(host.hostname ?? "New server"))
+                    .labelsHidden()
+                    .frame(width: 160)
+                    .onChange(of: name) {
+                        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                        monitor.store.updateHost(project.id, host.id) { $0.name = trimmed.isEmpty ? nil : trimmed }
+                        monitor.refreshHosts(project.id, poll: false)
+                    }
+                Button(role: .destructive) { confirming = true } label: {
+                    Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Remove this server")
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(host.displayName)
+                Text(monitor.agents.link(project.id, host.id)?.endpoint.display ?? "Not paired")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .confirmationDialog("Remove \(host.displayName)?", isPresented: $confirming) {
+            Button("Remove", role: .destructive) { monitor.removeHost(project.id, host.id) }
+        } message: {
+            Text("Rackpulse stops watching this server and deletes its pairing key. The agent keeps running until you run sudo rackpulse-agent uninstall on the server.")
         }
     }
 }

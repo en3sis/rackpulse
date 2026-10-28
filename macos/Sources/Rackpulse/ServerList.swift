@@ -6,6 +6,7 @@ struct ServerList: View {
     let store: ProjectStore
     var query = ""
     var highlighted: DetailTarget?
+    var addServer: (UUID) -> Void = { _ in }
     let open: (UUID, Int64) -> Void
 
     var body: some View {
@@ -46,12 +47,18 @@ struct ServerList: View {
         if let poller, poller.data.lastUpdated != nil {
             let servers = query.isEmpty ? sorted(poller) : sorted(poller).filter { Self.matches(project, poller, query, settings: monitor.settings).contains($0) }
             if servers.isEmpty {
-                EmptyLine(text: "No servers in this project yet.", link: ("Open \(project.provider.consoleName)", project.provider.consoleURL(project)))
+                if let url = project.provider.consoleURL(project) {
+                    EmptyLine(text: "No servers in this project yet.", link: ("Open \(project.provider.consoleName)", url))
+                } else {
+                    EmptyLine(text: "No servers in this project yet.", link: nil, action: ("Add a server", { addServer(project.id) }))
+                }
             }
             ForEach(Array(servers.enumerated()), id: \.element.id) { index, server in
                 let alert = poller.visibleAlerts.first { $0.id.hasSuffix(":\(server.id)") }
                 let divider = index < servers.count - 1
                 let environment = monitor.settings.environment(project: project.id, server: server)
+                let agent = monitor.agents.state(project.id, server.id)?.snapshot
+                let address = server.agentOnly ? monitor.agents.link(project.id, server.id)?.endpoint.host : nil
                 Button { open(project.id, server.id) } label: {
                     Group {
                         if monitor.settings.value.compactList {
@@ -61,11 +68,13 @@ struct ServerList: View {
                                 metrics: poller.data.metrics[server.id],
                                 alert: alert,
                                 threshold: monitor.settings.value.alertSettings(for: project).rule(.sustainedCPU, server: server.id)?.threshold,
-                                showsDivider: divider
+                                showsDivider: divider,
+                                agent: agent,
+                                address: address
                             )
                         } else {
                             ServerRow(server: server, environment: environment, metrics: poller.data.metrics[server.id], alert: alert, showsDivider: divider,
-                                      agent: monitor.agents.state(project.id, server.id)?.snapshot)
+                                      agent: agent, address: address)
                         }
                     }
                     .contentShape(Rectangle())
@@ -256,6 +265,7 @@ struct ProjectHeader: View {
             Text(project.name)
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
+            ProviderTag(provider: project.provider)
             Spacer(minLength: 8)
             Text(summary)
                 .font(.system(size: 11))
@@ -290,6 +300,7 @@ struct ProjectHeader: View {
 struct EmptyLine: View {
     let text: String
     let link: (String, URL)?
+    var action: (String, () -> Void)?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -297,6 +308,9 @@ struct EmptyLine: View {
                 .foregroundStyle(Theme.secondary)
             if let link {
                 Link(link.0, destination: link.1)
+            }
+            if let action {
+                Button(action.0, action: action.1).buttonStyle(.link)
             }
             Spacer(minLength: 0)
         }
@@ -352,6 +366,8 @@ struct ServerRow: View {
     let showsDivider: Bool
     var agent: AgentSnapshot?
 
+    var address: String?
+
     private var cpu: [MetricPoint] { metrics?.cpuPercent(cores: server.serverType.cores) ?? [] }
     private var running: Bool { server.status == .running }
 
@@ -370,6 +386,9 @@ struct ServerRow: View {
             }
 
             HStack(alignment: .top, spacing: 12) {
+                if server.agentOnly {
+                    metric("Load · 1 min", Format.load(agent?.host.load.first))
+                } else {
                 VStack(alignment: .leading, spacing: 3) {
                     caption("CPU · 1 h")
                     HStack(alignment: .bottom, spacing: 6) {
@@ -382,6 +401,7 @@ struct ServerRow: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 if let agent, running {
                     let fullest = agent.disks.max { $0.usedFraction < $1.usedFraction }
                     metric("Memory", Format.percent(agent.memory.usedFraction * 100), warn: agent.memory.usedFraction >= 0.9)
@@ -421,7 +441,7 @@ struct ServerRow: View {
     }
 
     private var meta: String {
-        let base = "\(server.serverType.name.uppercased()) · \(Format.place(server.location))"
+        let base = server.meta(address: address)
         return running ? base : "\(base) · \(statusLabel)"
     }
 
@@ -435,6 +455,7 @@ struct ServerRow: View {
 
     private var statusColor: Color {
         if let alert { return Theme.color(alert.severity) }
+        if server.agentOnly && agent == nil { return Theme.off }
         switch server.status {
         case .running: return Theme.green
         case .off: return Theme.off
@@ -537,9 +558,15 @@ struct CompactServerRow: View {
     let alert: FiringAlert?
     let threshold: Double?
     let showsDivider: Bool
+    var agent: AgentSnapshot?
+    var address: String?
 
     private var running: Bool { server.status == .running }
-    private var cpu: Double? { metrics?.cpuPercent(cores: server.serverType.cores).last?.value }
+    private var load: Double? { agent?.host.load.first }
+    private var cpu: Double? {
+        if server.agentOnly { return load.map { $0 / Double(max(1, agent?.host.cores ?? 1)) * 100 } }
+        return metrics?.cpuPercent(cores: server.serverType.cores).last?.value
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -548,7 +575,7 @@ struct CompactServerRow: View {
                 Text(server.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                 EnvironmentBadge(environment: environment)
                 Spacer(minLength: 8)
-                Text(running ? Format.percent(cpu) : statusLabel)
+                Text(server.agentOnly ? "Load \(Format.load(load))" : running ? Format.percent(cpu) : statusLabel)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(running ? barColor : Theme.off)
                     .rolling(cpu)
@@ -564,10 +591,14 @@ struct CompactServerRow: View {
             }
             .frame(height: 4)
             HStack(spacing: 4) {
-                Text("\(server.serverType.name.uppercased()) · \(Format.place(server.location))")
+                Text(server.meta(address: address))
                     .lineLimit(1)
                 Spacer(minLength: 8)
-                if running {
+                if server.agentOnly {
+                    if let fullest = agent?.disks.max(by: { $0.usedFraction < $1.usedFraction }) {
+                        Text("Disk \(Format.percent(fullest.usedFraction * 100))")
+                    }
+                } else if running {
                     Text("↑ \(Format.rate(metrics?.points(MetricSeries.networkBandwidthOut).last?.value))")
                         .rolling(metrics?.points(MetricSeries.networkBandwidthOut).last?.value)
                 }
@@ -593,6 +624,7 @@ struct CompactServerRow: View {
 
     private var statusColor: Color {
         if let alert { return Theme.color(alert.severity) }
+        if server.agentOnly && agent == nil { return Theme.off }
         switch server.status {
         case .running: return Theme.green
         case .off: return Theme.off
@@ -606,5 +638,27 @@ struct CompactServerRow: View {
         if cpu > limit { return Theme.red }
         if cpu > limit * 0.75 { return Theme.orange }
         return Theme.green
+    }
+}
+
+extension Server {
+    func meta(address: String?) -> String {
+        guard agentOnly else { return "\(serverType.name.uppercased()) · \(Format.place(location))" }
+        let parts = [serverType.name, address ?? ""].filter { !$0.isEmpty }
+        return parts.isEmpty ? "Waiting for the agent" : parts.joined(separator: " · ")
+    }
+}
+
+struct ProviderTag: View {
+    let provider: CloudProvider
+
+    var body: some View {
+        Text(provider.name)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(Theme.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 4))
+            .fixedSize()
     }
 }

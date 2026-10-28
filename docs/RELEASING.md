@@ -130,6 +130,8 @@ Users go back to older versions, and servers run older agents. Every change keep
 | Database (`rackpulse.sqlite`) | A new schema version only adds tables or columns, in its own `version < N` step. Never rename or drop |
 | Settings | New fields are optional with a default. An older app must read settings written by a newer one |
 | New enum values | Avoid them in saved settings, or decode unknown values to a fallback. Today 0.2.2 resets all alert settings when a rule uses `digest` |
+| Projects | `projects` in UserDefaults holds only Hetzner projects. Projects of any other kind go under `agentProjects`, so an older app never loads a project without a token |
+| Agent-only servers | Host ids are negative, so they never collide with provider ids in `uptime.json` or other stores keyed by server id |
 | Agent API | Only add fields. The app treats missing fields as unsupported |
 | Agent flags | Publish the agent before the app shows a command that uses a new flag |
 

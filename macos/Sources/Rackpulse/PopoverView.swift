@@ -21,6 +21,7 @@ struct PopoverView: View {
     let updates: Updates
 
     @State private var adding = false
+    @State private var addingTo: UUID?
     @Environment(AppActions.self) private var actions
     @State private var detail: DetailTarget?
     @State private var tab = Tab.servers
@@ -79,6 +80,7 @@ struct PopoverView: View {
         .monospacedDigit()
         .onAppear { monitor.refreshIfStale() }
         .onChange(of: tab) { if tab != .costs { costProject = nil } }
+        .onChange(of: detailGone) { if detailGone { detail = nil } }
         .onChange(of: store.showsAll) { costProject = nil }
         .onChange(of: actions.opened, initial: true) {
             costProject = nil
@@ -97,7 +99,8 @@ struct PopoverView: View {
             case .agent(let project, let id): detail = DetailTarget(project: project, server: id, agent: true); adding = false
             case .serverTab(let project, let id, let tab): detail = DetailTarget(project: project, server: id, tab: tab); adding = false
             case .container(let project, let id, let name): detail = DetailTarget(project: project, server: id, tab: .docker, container: name); adding = false
-            case .addProject: adding = true
+            case .addProject: adding = true; addingTo = nil
+            case .addServer(let project): adding = true; addingTo = project
             }
             actions.route = nil
         }
@@ -108,10 +111,17 @@ struct PopoverView: View {
             if monitor.locked {
                 LockView { Task { await monitor.unlock() } }
             } else if store.projects.isEmpty || adding {
-                OnboardingView(store: store, canCancel: !store.projects.isEmpty) { added in
+                OnboardingView(monitor: monitor, canCancel: !store.projects.isEmpty, agentProject: addingTo) { added in
                     adding = false
+                    addingTo = nil
                     if added { monitor.projectChanged() }
+                } openAgent: { project, server in
+                    adding = false
+                    addingTo = nil
+                    tab = .servers
+                    detail = DetailTarget(project: project, server: server, agent: true)
                 }
+                .id(addingTo)
             } else if let detail, let project = store.project(detail.project), let poller = monitor.poller(detail.project),
                       let server = poller.data.servers.first(where: { $0.id == detail.server }) {
                 if detail.agent {
@@ -141,7 +151,8 @@ struct PopoverView: View {
                 switch showsCosts ? tab : .servers {
                 case .servers:
                     if !query.isEmpty { searchBar }
-                    ServerList(monitor: monitor, store: store, query: query, highlighted: highlightedTarget) {
+                    ServerList(monitor: monitor, store: store, query: query, highlighted: highlightedTarget,
+                               addServer: { addingTo = $0; adding = true }) {
                         detail = DetailTarget(project: $0, server: $1)
                     }
                     .id(monitor.settings.value.compactList)
@@ -306,7 +317,7 @@ struct PopoverView: View {
             add(project.name, image: project.menuImage, checked: !store.showsAll && store.selectedID == project.id) { select(project.id) }
         }
         menu.addItem(.separator())
-        add("Add Project…", image: symbol("plus"), key: "n") { adding = true }
+        add("Add Servers…", image: symbol("plus"), key: "n") { addingTo = nil; adding = true }
         add("Settings…", image: symbol("gearshape"), key: ",") { openSettings() }
         if updates.isAvailable {
             menu.addItem(.separator())
@@ -403,7 +414,12 @@ struct PopoverView: View {
 
     private var pageKey: String {
         if let detail { return "server\(detail.project)\(detail.server)\(detail.agent)\(detail.container ?? "")" }
-        return adding ? "add" : tab.rawValue
+        return adding ? "add\(addingTo?.uuidString ?? "")" : tab.rawValue
+    }
+
+    private var detailGone: Bool {
+        guard let detail, let poller = monitor.poller(detail.project), poller.data.lastUpdated != nil else { return false }
+        return !poller.data.servers.contains { $0.id == detail.server }
     }
 
     private var single: Project? {

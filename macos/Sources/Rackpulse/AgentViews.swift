@@ -40,8 +40,11 @@ struct AgentSetupView: View {
     private var publicAddresses: [AgentAddress] { [.publicIPv4, .publicIPv6].filter { $0.host(for: server) != nil } }
     private var stuck: Bool { !paired && tries >= 10 && state?.problem != nil }
 
+    private var agentOnly: Bool { !project.hasAPI }
+
     private var address: AgentAddress {
-        switch route {
+        if agentOnly, route == .publicIP { return custom.contains(":") ? .publicIPv6 : .publicIPv4 }
+        return switch route {
         case .tailscale: .tailscale
         case .privateNetwork: .privateNetwork
         case .publicIP: publicAddress
@@ -50,7 +53,8 @@ struct AgentSetupView: View {
     }
 
     private var host: String {
-        switch route {
+        if agentOnly, route == .publicIP || route == .privateNetwork { return custom.trimmingCharacters(in: .whitespaces) }
+        return switch route {
         case .tailscale: tailnetHost.trimmingCharacters(in: .whitespaces)
         case .other: custom.trimmingCharacters(in: .whitespaces)
         case .privateNetwork, .publicIP: address.host(for: server) ?? ""
@@ -81,6 +85,7 @@ struct AgentSetupView: View {
         .onChange(of: custom) { save() }
         .onChange(of: port) { save() }
         .onChange(of: onlyThisMac) { lookUpMac() }
+        .onChange(of: paired) { if agentOnly && paired { monitor.refreshHosts(project.id) } }
         .task(id: link?.endpoint) {
             tries = 0
             while !Task.isCancelled, link.map({ !$0.isPaired }) ?? false {
@@ -136,7 +141,9 @@ struct AgentSetupView: View {
     @ViewBuilder
     private var setup: some View {
         if !paired {
-            Text("Adds memory, disk space, Docker containers and 30 days of uptime. The agent is read-only, and Rackpulse works without it.")
+            Text(agentOnly
+                 ? "The agent reports memory, disk space, Docker containers and 30 days of uptime. It is read-only and changes nothing on the server."
+                 : "Adds memory, disk space, Docker containers and 30 days of uptime. The agent is read-only, and Rackpulse works without it.")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -149,7 +156,13 @@ struct AgentSetupView: View {
         if let command {
             if route == .publicIP {
                 title("Allow the port")
-                firewallCard
+                if agentOnly {
+                    card {
+                        caption("Allow TCP \(portNumber) in the server's firewall, and in your provider's firewall if it has one. Allow only this Mac's address if you can.")
+                    }
+                } else {
+                    firewallCard
+                }
             }
             title("Run on the server")
             code(command, masked: true)
@@ -180,6 +193,23 @@ struct AgentSetupView: View {
 
     @ViewBuilder
     private var routeDetails: some View {
+        if agentOnly, route == .publicIP || route == .privateNetwork {
+            card {
+                field("Address") {
+                    TextField(route == .publicIP ? "203.0.113.10" : "10.0.0.5", text: $custom).frame(width: 200)
+                }
+                field("Port") { portField }
+                caption(route == .publicIP
+                        ? "The server's public IPv4 or IPv6 address."
+                        : "Your Mac must reach this address, for example through a VPN.")
+            }
+        } else {
+            routeOptions
+        }
+    }
+
+    @ViewBuilder
+    private var routeOptions: some View {
         switch route {
         case .tailscale:
             card {
@@ -262,7 +292,7 @@ struct AgentSetupView: View {
                 }
                 Spacer(minLength: 0)
                 Button {
-                    NSWorkspace.shared.open(firewallsURL)
+                    if let firewallsURL { NSWorkspace.shared.open(firewallsURL) }
                 } label: {
                     Label(attached.isEmpty ? "Add a firewall" : "Open in Console", systemImage: "arrow.up.right")
                 }
@@ -315,10 +345,12 @@ struct AgentSetupView: View {
         let unreachable = [AgentProblem.agent(.timedOut), .agent(.unreachable), .agent(.invalidAddress)].contains(problem)
         title("Checks")
         card {
-            checkRow(server.status == .running ? .passed : .failed, "Server is running")
-            Divider()
+            if !agentOnly {
+                checkRow(server.status == .running ? .passed : .failed, "Server is running")
+                Divider()
+            }
             checkRow(unreachable ? .failed : .passed, "This Mac reaches \(link.endpoint.display)") {
-                if unreachable && route == .publicIP {
+                if unreachable && route == .publicIP, let firewallsURL {
                     Button("Open firewall") { NSWorkspace.shared.open(firewallsURL) }.controlSize(.small)
                 }
             }
@@ -451,6 +483,7 @@ struct AgentSetupView: View {
                 Button("Cancel") { removing = false }
                 Button(role: .destructive) {
                     store.remove(project.id, server.id)
+                    if agentOnly { monitor.removeHost(project.id, server.id) }
                     back()
                 } label: {
                     Text("Remove from Rackpulse").foregroundStyle(Theme.red)
@@ -562,7 +595,7 @@ struct AgentSetupView: View {
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 7))
     }
 
-    private var firewallsURL: URL {
+    private var firewallsURL: URL? {
         project.provider.firewallsURL(project)
     }
 
@@ -576,18 +609,19 @@ struct AgentSetupView: View {
     }
 
     private func load() {
-        tailnetHost = server.name
+        tailnetHost = agentOnly ? "" : server.name
         publicAddress = publicAddresses.first ?? .publicIPv4
         if let link {
             apply(link)
         } else {
-            route = macOnTailscale ? .tailscale : publicAddresses.isEmpty ? .other : .publicIP
+            route = macOnTailscale ? .tailscale : publicAddresses.isEmpty && !agentOnly ? .other : .publicIP
             save()
         }
     }
 
     private func apply(_ link: AgentLink) {
         port = String(link.endpoint.port)
+        if agentOnly { custom = link.endpoint.host }
         switch link.address {
         case .publicIPv4, .publicIPv6:
             route = .publicIP

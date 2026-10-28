@@ -234,12 +234,14 @@ struct CostsView: View {
 
     private func disclaimer(_ summary: CostSummary) -> String {
         let vat = summary.priceKind == .gross ? "with VAT" : "without VAT"
-        var text = "Estimated from list prices × hours each resource existed this month, \(vat). Hetzner has no billing API, so credits and traffic overage are not included."
+        var text = store.scope.contains(where: \.hasAPI)
+            ? "Estimated from list prices × hours each resource existed this month, \(vat). Hetzner has no billing API, so credits and traffic overage are not included."
+            : "Estimated from the monthly prices you entered for these servers. Add a price in Settings to include a server."
         if summary.hasUserPrices {
             text += " Servers marked your price use the monthly price you entered."
         }
         if !summary.missing.isEmpty {
-            text += " No price found for: \(summary.missing.joined(separator: ", "))."
+            text += " No price for: \(summary.missing.joined(separator: ", "))."
         }
         return text
     }

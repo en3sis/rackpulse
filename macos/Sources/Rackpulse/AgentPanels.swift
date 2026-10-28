@@ -178,7 +178,9 @@ struct AgentInvitation: View {
                 Text("Memory, disk space and Docker").font(.system(size: 12, weight: .semibold))
             }
             Text(link == nil
-                 ? "The provider's API does not report what happens inside the server. Install the optional Rackpulse agent to see it here."
+                 ? (server.agentOnly
+                    ? "This server has no provider API. Install the Rackpulse agent to see it in Rackpulse."
+                    : "The provider's API does not report what happens inside the server. Install the optional Rackpulse agent to see it here.")
                  : "Agent setup is not finished. Rackpulse is waiting for the agent at \(link?.place ?? "").")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.secondary)

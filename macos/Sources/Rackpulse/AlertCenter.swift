@@ -26,8 +26,8 @@ final class AlertCenter {
         self.database = database
     }
 
-    static func target(project: UUID, server: Int64) -> String {
-        "hetzner/\(project.uuidString)/server/\(server)"
+    static func target(project: Project, server: Int64) -> String {
+        "\(project.provider.targetPrefix)/\(project.id.uuidString)/server/\(server)"
     }
 
     static func notificationID(project: UUID, alert: String) -> String {
@@ -85,7 +85,7 @@ final class AlertCenter {
                 let rule = context.alertSettings.rule(alert.kind, server: serverID)
                 let notification = OutgoingNotification(
                     id: Self.notificationID(project: project.id, alert: alert.id), project: key,
-                    target: serverID.map { Self.target(project: project.id, server: $0) }, kind: alert.kind, snoozeID: alert.id,
+                    target: serverID.map { Self.target(project: project, server: $0) }, kind: alert.kind, snoozeID: alert.id,
                     heading: server?.name ?? project.name, title: alert.title, subtitle: subtitle(serverID),
                     body: "Started \(alert.since.formatted(date: .omitted, time: .shortened)). Rule: \(alert.kind.title).",
                     severity: alert.severity, delivery: rule?.delivery ?? .banner, created: now

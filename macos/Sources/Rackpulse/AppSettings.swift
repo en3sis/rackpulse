@@ -70,6 +70,12 @@ struct AppSettings: Codable, Equatable {
             settings.rules[index].enabled = false
         }
         for (id, override) in Self.servers(serverAlerts, project: project.id) { settings.servers[id] = override }
+        if !project.hasAPI {
+            let providerKinds: Set<RuleKind> = [.serverDown, .sustainedCPU, .storageBox, .trafficQuota, .diskIO, .unexpectedChange]
+            for index in settings.rules.indices where providerKinds.contains(settings.rules[index].kind) {
+                settings.rules[index].enabled = false
+            }
+        }
         return settings
     }
 

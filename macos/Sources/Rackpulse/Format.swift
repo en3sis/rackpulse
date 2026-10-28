@@ -15,6 +15,11 @@ enum Format {
         return String(format: "%.0f /s", value)
     }
 
+    static func load(_ value: Double?) -> String {
+        guard let value else { return "-" }
+        return String(format: "%.2f", value)
+    }
+
     static func percent(_ value: Double?) -> String {
         guard let value else { return "-" }
         return String(format: "%.0f%%", value)

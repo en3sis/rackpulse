@@ -11,6 +11,8 @@
 - A new agent setup: choose how your Mac reaches the server (Tailscale, private network, public IP, or another address) and get the matching command and firewall steps. The pairing key is hidden in the command. Change a paired agent's address without pairing again.
 - Agent data shows right after Rackpulse starts, instead of after the first check interval.
 - While a server's page is open, its agent is read every 5 seconds.
+- Add servers that run only the agent, with no provider account: home lab, bare metal or any cloud. They live in their own projects. Power controls, traffic and the Console are not available for them, and they count in Costs only with a price you enter.
+- The server list opens in the detailed view each time. The refresh icon finishes its turn, and the label reads "Updated 12s ago".
 
 ### Agent
 

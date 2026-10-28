@@ -83,6 +83,25 @@ struct EngineTests {
         #expect(state.firing.map(\.id) == ["serverDown:1"])
     }
 
+    @Test func agentOnlyServerSkipsServerDownAndSaysNotAnswering() {
+        let engine = RuleEngine(settings: AlertSettings(), calendar: utc)
+        let t0 = date("2026-10-25T12:00:00Z")
+        var host = server(-1, status: .off)
+        host.agentOnly = true
+        let report = [Int64(-1): AgentReport(current: nil, failures: 3)]
+        var state = AlertState()
+        for step in 0..<2 {
+            (state, _) = engine.evaluate(PollSnapshot(time: t0 + Double(step * 60), servers: [host], agents: report), state: state)
+        }
+        #expect(!state.firing.contains { $0.kind == .serverDown })
+
+        var running = server(-2)
+        running.agentOnly = true
+        (state, _) = engine.evaluate(PollSnapshot(time: t0, servers: [running], agents: [-2: AgentReport(current: nil, failures: 3)]),
+                                     state: AlertState())
+        #expect(state.firing.first { $0.id == "agentUnreachable:-2" }?.title == "server--2 does not answer")
+    }
+
     @Test func serverOverridesChangeThresholdOrMute() {
         var settings = AlertSettings()
         var custom = RuleConfig.defaults.first { $0.kind == .sustainedCPU }!

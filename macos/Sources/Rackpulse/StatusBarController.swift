@@ -24,6 +24,7 @@ enum PanelRoute: Equatable {
     case serverTab(UUID, Int64, ServerTab)
     case container(UUID, Int64, String)
     case addProject
+    case addServer(UUID)
 }
 
 @MainActor

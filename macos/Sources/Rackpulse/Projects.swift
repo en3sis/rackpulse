@@ -109,6 +109,8 @@ struct Project: Codable, Identifiable, Hashable {
     var sshUser: String
     var access: TokenAccess
     var consoleID: String?
+    var provider: CloudProvider = .hetzner
+    var hosts: [AgentHost] = []
 
     init(id: UUID = UUID(), name: String, addedAt: Date = .now) {
         self.id = id
@@ -122,7 +124,7 @@ struct Project: Codable, Identifiable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, addedAt, environment, color, icon, budget, sshUser, access, consoleID
+        case id, name, addedAt, environment, color, icon, budget, sshUser, access, consoleID, provider, hosts
     }
 
     init(from decoder: Decoder) throws {
@@ -137,6 +139,12 @@ struct Project: Codable, Identifiable, Hashable {
         sshUser = (try? container.decodeIfPresent(String.self, forKey: .sshUser)) ?? "root"
         access = (try? container.decodeIfPresent(TokenAccess.self, forKey: .access)) ?? .readOnly
         consoleID = try? container.decodeIfPresent(String.self, forKey: .consoleID)
+        provider = (try? container.decodeIfPresent(CloudProvider.self, forKey: .provider)) ?? .hetzner
+        hosts = (try? container.decodeIfPresent([AgentHost].self, forKey: .hosts)) ?? []
+    }
+
+    func host(_ id: Int64) -> AgentHost? {
+        hosts.first { $0.id == id }
     }
 }
 
@@ -144,6 +152,8 @@ struct Project: Codable, Identifiable, Hashable {
 @Observable
 final class ProjectStore {
     private static let projectsKey = "projects"
+    private static let agentProjectsKey = "agentProjects"
+    private static let hostCounterKey = "agentHostCounter"
     private static let selectedKey = "selectedProject"
     private static let showsAllKey = "showsAllProjects"
     private static let collapsedKey = "collapsedProjects"
@@ -160,8 +170,9 @@ final class ProjectStore {
     }
 
     init() {
-        let data = UserDefaults.standard.data(forKey: Self.projectsKey)
-        projects = data.flatMap { try? JSONDecoder().decode([Project].self, from: $0) } ?? []
+        let cloud = Self.load(Self.projectsKey).filter { $0.provider == .hetzner }
+        let agent = Self.load(Self.agentProjectsKey).filter { $0.provider == .agent }
+        projects = (cloud + agent).sorted { $0.addedAt < $1.addedAt }
         let saved = UserDefaults.standard.string(forKey: Self.selectedKey).flatMap(UUID.init)
         showsAll = UserDefaults.standard.object(forKey: Self.showsAllKey) as? Bool ?? true
         collapsed = Set((UserDefaults.standard.stringArray(forKey: Self.collapsedKey) ?? []).compactMap(UUID.init))
@@ -189,6 +200,38 @@ final class ProjectStore {
         var project = Project(name: name)
         project.access = access
         try Keychain.save(token, account: project.id.uuidString)
+        append(project)
+    }
+
+    @discardableResult
+    func addAgentProject(name: String) -> Project {
+        var project = Project(name: name)
+        project.provider = .agent
+        project.icon = "house"
+        append(project)
+        return project
+    }
+
+    func addHost(to project: UUID) -> Int64? {
+        guard self.project(project)?.provider == .agent else { return nil }
+        let id = Int64(UserDefaults.standard.integer(forKey: Self.hostCounterKey) - 1)
+        UserDefaults.standard.set(Int(id), forKey: Self.hostCounterKey)
+        update(project) { $0.hosts.append(AgentHost(id: id, addedAt: .now)) }
+        return id
+    }
+
+    func updateHost(_ project: UUID, _ id: Int64, _ change: (inout AgentHost) -> Void) {
+        update(project) { project in
+            guard let index = project.hosts.firstIndex(where: { $0.id == id }) else { return }
+            change(&project.hosts[index])
+        }
+    }
+
+    func removeHost(_ project: UUID, _ id: Int64) {
+        update(project) { $0.hosts.removeAll { $0.id == id } }
+    }
+
+    private func append(_ project: Project) {
         projects.append(project)
         persist()
         selectedID = project.id
@@ -209,14 +252,19 @@ final class ProjectStore {
     }
 
     func remove(_ project: Project) {
-        Keychain.delete(account: project.id.uuidString)
+        if project.provider == .hetzner { Keychain.delete(account: project.id.uuidString) }
         projects.removeAll { $0.id == project.id }
         persist()
         if selectedID == project.id { selectedID = projects.first?.id }
     }
 
     private func persist() {
-        UserDefaults.standard.set(try? JSONEncoder().encode(projects), forKey: Self.projectsKey)
+        UserDefaults.standard.set(try? JSONEncoder().encode(projects.filter { $0.provider == .hetzner }), forKey: Self.projectsKey)
+        UserDefaults.standard.set(try? JSONEncoder().encode(projects.filter { $0.provider == .agent }), forKey: Self.agentProjectsKey)
+    }
+
+    private static func load(_ key: String) -> [Project] {
+        UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode([Project].self, from: $0) } ?? []
     }
 }
 

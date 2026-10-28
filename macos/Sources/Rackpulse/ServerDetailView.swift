@@ -147,6 +147,7 @@ struct ServerDetailView: View {
         if hasAgent {
             AgentOverview(server: server, project: project, monitor: monitor, openSetup: openAgent, openDocker: { tab = .docker })
         }
+        if !server.agentOnly || hasAgent {
         SectionHeader("Activity")
             .padding(.top, 18)
         SegmentedControl(selection: $range, options: MetricRange.allCases.map { ($0, $0.rawValue) })
@@ -160,8 +161,9 @@ struct ServerDetailView: View {
                 .padding(.top, 6)
         }
         VStack(spacing: 14) {
-            cpuChart
+            if !server.agentOnly { cpuChart }
             if hasAgent { memoryChart }
+            if !server.agentOnly {
             pairChart(
                 title: "Disk IOPS", detail: "read / write",
                 first: ("Read", metrics?.points(MetricSeries.diskIOPSRead) ?? []),
@@ -174,13 +176,15 @@ struct ServerDetailView: View {
                 second: ("Out", metrics?.points(MetricSeries.networkBandwidthOut) ?? []),
                 format: Format.rate
             )
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
 
-        UptimeCard(timeline: timeline, hasAgent: hasAgent)
+        UptimeCard(timeline: timeline, hasAgent: hasAgent, agentOnly: server.agentOnly)
             .padding(.horizontal, 16)
             .padding(.top, 16)
+        }
 
         if !hasAgent {
             SectionHeader("Inside the server")
@@ -233,6 +237,7 @@ struct ServerDetailView: View {
                 HStack(spacing: 6) {
                     Circle().fill(statusColor).frame(width: 8, height: 8)
                     Text(server.name).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                    if server.agentOnly { ProviderTag(provider: .agent) }
                     environmentMenu
                 }
                 Text(spec)
@@ -524,7 +529,49 @@ struct ServerDetailView: View {
         return server.status == .running ? "No data for this period." : "No data while the server is off."
     }
 
+    @ViewBuilder
     private var facts: some View {
+        if server.agentOnly { agentFacts } else { providerFacts }
+    }
+
+    private var agentFacts: some View {
+        let link = monitor.agents.link(project.id, server.id)
+        return LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+            fact("Status", agentStatusText, icon: "power", accent: agentAnswering ? Theme.green : nil)
+            fact("Address", link?.endpoint.display ?? "Not paired", icon: "network")
+            fact("System", snapshot.map { "\($0.host.os) · \($0.host.arch)" } ?? "Unknown", icon: "cpu")
+            fact("Kernel", snapshot?.host.kernel ?? "Unknown", icon: "gearshape.2")
+            fact("Alerts", alertsText, icon: alertMode == .off ? "bell.slash" : "bell")
+            fact("Agent", link?.version ?? "Not paired", icon: "antenna.radiowaves.left.and.right")
+            if let report = monitor.costReport(for: project.id) {
+                let user = monitor.costEstimator(for: project.id).userPrice(server.id)
+                let spent = report.lines.filter { $0.kind == .server && $0.resourceID == server.id }.reduce(Decimal(0)) { $0 + $1.monthToDate }
+                priceFact("Your price", user.map { "\(money($0, report.currency)) a month" } ?? "Add a price",
+                          help: "This server has no list price. Click to enter the monthly price you pay.")
+                if user != nil {
+                    priceFact("Cost this month", money(spent, report.currency), help: "Estimated from your price since the start of the month.")
+                }
+            }
+        }
+    }
+
+    private var agentAnswering: Bool {
+        guard let state = monitor.agents.state(project.id, server.id) else { return false }
+        return state.snapshot != nil && state.problem == nil && !agentUnreachable
+    }
+
+    private var agentUnreachable: Bool {
+        poller.visibleAlerts.contains { $0.kind == .agentUnreachable && $0.id.hasSuffix(":\(server.id)") }
+    }
+
+    private var agentStatusText: String {
+        guard hasAgent else { return "Not paired" }
+        guard agentAnswering else { return "Not answering" }
+        guard let boot = snapshot?.host.bootTime else { return "Answering" }
+        return "Up \(Format.compactDuration(since: boot))"
+    }
+
+    private var providerFacts: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
             fact("Status", statusText, icon: "power", accent: server.status == .running ? Theme.green : nil, help: statusHelp)
             fact("Traffic out", trafficText, icon: "arrow.up.arrow.down")
@@ -571,7 +618,8 @@ struct ServerDetailView: View {
         let matched = Set([root?.id].compactMap { $0 } + volumeMounts.values.map(\.id))
         let others = mounts.filter { !matched.contains($0.id) }
         return VStack(spacing: 0) {
-            diskRow(icon: "internaldrive", name: "Local disk", meta: "Included with \(server.serverType.name.uppercased())",
+            diskRow(icon: "internaldrive", name: server.agentOnly ? "Root" : "Local disk",
+                    meta: server.agentOnly ? (root.map { "\($0.fs) · \($0.device)" } ?? "/") : "Included with \(server.serverType.name.uppercased())",
                     size: local, usage: root, divider: !volumes.isEmpty || !others.isEmpty)
             ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
                 diskRow(
@@ -684,13 +732,20 @@ struct ServerDetailView: View {
     }
 
     private var spec: String {
+        if server.agentOnly {
+            let memory = snapshot.map { Format.memory($0.memory.total) }
+            let disk = snapshot?.disks.first { $0.mount == "/" }.map { Format.size($0.total) }
+            let parts = [server.serverType.name, memory ?? "", disk ?? "", project.name].filter { !$0.isEmpty }
+            return parts.joined(separator: " · ")
+        }
         let type = server.serverType
         let cpu = type.cpuType == "dedicated" ? "dedicated vCPU" : "vCPU"
         return "\(type.name.uppercased()) · \(Int(type.cores)) \(cpu) · \(Int(type.memory)) GB · \(Int(type.disk)) GB · \(Format.place(server.location))"
     }
 
     private var statusColor: Color {
-        switch server.status {
+        if server.agentOnly { return agentAnswering ? Theme.green : hasAgent ? Theme.orange : Theme.off }
+        return switch server.status {
         case .running: Theme.green
         case .off: Theme.off
         default: Theme.orange
@@ -775,6 +830,10 @@ struct ServerDetailView: View {
     }
 
     private func loadMetrics() async {
+        if server.agentOnly {
+            await loadMemory()
+            return
+        }
         async let agentMemory: Void = loadMemory()
         do {
             let loaded = try await poller.history(server: server.id, range: range)
@@ -813,20 +872,30 @@ struct ServerDetailView: View {
 
     private var quickActions: some View {
         let ipv4 = server.publicNet.ipv4?.ip
+        let address = server.agentOnly ? monitor.agents.link(project.id, server.id)?.endpoint.host : ipv4
         let user = project.sshUser.isEmpty ? "root" : project.sshUser
         return HStack(spacing: 8) {
-            QuickAction(title: "SSH", icon: "terminal", help: ipv4.map { "ssh \(user)@\($0)" } ?? "No public IPv4") {
-                if let ipv4, let url = URL(string: "ssh://\(user)@\(ipv4)") { NSWorkspace.shared.open(url) }
+            QuickAction(title: "SSH", icon: "terminal", help: address.map { "ssh \(user)@\($0)" } ?? "No address") {
+                if let address, let url = URL(string: "ssh://\(user)@\(address.contains(":") ? "[\(address)]" : address)") {
+                    NSWorkspace.shared.open(url)
+                }
             }
-            .disabled(ipv4 == nil)
-            QuickAction(title: copied == "IPv4" ? "Copied" : "IPv4", icon: "doc.on.doc", help: ipv4 ?? "No public IPv4") {
-                copy(ipv4, label: "IPv4")
+            .disabled(address == nil)
+            if server.agentOnly {
+                QuickAction(title: copied == "Address" ? "Copied" : "Copy IP", icon: "doc.on.doc", help: address ?? "No address") {
+                    copy(address, label: "Address")
+                }
+                .disabled(address == nil)
+            } else {
+                QuickAction(title: copied == "IPv4" ? "Copied" : "IPv4", icon: "doc.on.doc", help: ipv4 ?? "No public IPv4") {
+                    copy(ipv4, label: "IPv4")
+                }
+                .disabled(ipv4 == nil)
+                QuickAction(title: copied == "IPv6" ? "Copied" : "IPv6", icon: "doc.on.doc", help: ipv6 ?? "No public IPv6") {
+                    copy(ipv6, label: "IPv6")
+                }
+                .disabled(ipv6 == nil)
             }
-            .disabled(ipv4 == nil)
-            QuickAction(title: copied == "IPv6" ? "Copied" : "IPv6", icon: "doc.on.doc", help: ipv6 ?? "No public IPv6") {
-                copy(ipv6, label: "IPv6")
-            }
-            .disabled(ipv6 == nil)
             QuickAction(title: "Alerts", icon: alertMode == .off ? "bell.slash" : "bell.badge", help: "Alert settings for this server") {
                 monitor.settings.requestedPage = .project(project.id)
                 app.showSettings()

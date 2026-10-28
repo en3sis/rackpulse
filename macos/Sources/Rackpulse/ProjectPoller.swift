@@ -47,7 +47,7 @@ final class ProjectPoller {
     private(set) var problem: String?
 
     let access: TokenAccess
-    private let client: HetznerClient
+    private let client: HetznerClient?
     private let controlClient: HetznerClient?
     private(set) var isLoading = false
 
@@ -59,6 +59,21 @@ final class ProjectPoller {
         self.access = access
         client = HetznerClient(api: .cloud, token: token)
         controlClient = access == .readWrite ? HetznerClient(api: .cloud, token: token, access: .readWrite) : nil
+    }
+
+    init(agentProject projectID: UUID) {
+        self.projectID = projectID
+        access = .readOnly
+        client = nil
+        controlClient = nil
+    }
+
+    var hasAPI: Bool { client != nil }
+
+    func setHosts(_ servers: [Server]) {
+        guard client == nil else { return }
+        data.servers = servers.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        if data.lastUpdated == nil { data.lastUpdated = .now }
     }
 
     func power(_ action: PowerAction, server id: Int64) async throws {
@@ -80,37 +95,51 @@ final class ProjectPoller {
     }
 
     func pricing() async -> Pricing? {
-        try? await client.pricing()
+        try? await client?.pricing()
     }
 
     func history(server id: Int64, range: MetricRange) async throws -> ServerMetrics {
         let now = Date.now
         let step = max(60, Int(range.seconds / 120))
+        guard let client else { throw HetznerError.invalidResponse }
         return try await client.metrics(server: id, start: now.addingTimeInterval(-range.seconds), end: now, step: step)
     }
 
     func powerHistory(server id: Int64) async -> (actions: [ServerAction], complete: Bool)? {
-        try? await client.actions(server: id, since: Date.now.addingTimeInterval(-UptimeTimeline.window))
+        try? await client?.actions(server: id, since: Date.now.addingTimeInterval(-UptimeTimeline.window))
     }
 
     func recentActions(server id: Int64) async -> [ServerAction] {
-        (try? await client.actions(server: id)) ?? data.actions.filter { $0.targets(server: id) }
+        guard let client else { return [] }
+        return (try? await client.actions(server: id)) ?? data.actions.filter { $0.targets(server: id) }
     }
 
     func firewallNames() async -> [Int64: String] {
         if let names = data.firewallNames { return names }
-        guard let firewalls = try? await client.firewalls() else { return [:] }
+        guard let firewalls = try? await client?.firewalls() else { return [:] }
         let names = Dictionary(firewalls.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         data.firewallNames = names
         return names
     }
 
-    func refresh(_ context: PollContext) async -> [AlertEvent] {
+    func refresh(_ context: PollContext, hosts: [Server] = []) async -> [AlertEvent] {
         guard !isLoading else { return [] }
         isLoading = true
         defer { isLoading = false }
         let now = context.now
         var next = data
+        guard let client else {
+            next.servers = hosts.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            next.resourcesFetched = now
+            let snapshot = PollSnapshot(time: now, servers: next.servers, metrics: [:], iopsBaseline: [:], actions: [],
+                                        volumes: nil, firewalls: nil, costForecast: Self.userForecast(next.servers, context), agents: context.agents)
+            let (alerts, events) = RuleEngine(settings: context.alertSettings).evaluate(snapshot, state: next.alerts)
+            next.alerts = alerts
+            next.lastUpdated = now
+            data = next
+            problem = nil
+            return events
+        }
         do {
             let servers = try await client.servers()
             next.servers = servers.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
@@ -166,6 +195,7 @@ final class ProjectPoller {
     }
 
     private func refreshResources(into next: inout ProjectData, now: Date) async {
+        guard let client else { return }
         async let volumes = try? client.volumes()
         async let primaryIPs = try? client.primaryIPs()
         async let floatingIPs = try? client.floatingIPs()
@@ -191,6 +221,12 @@ final class ProjectPoller {
             next.firewallNames = Dictionary(list.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         }
         next.resourcesFetched = now
+    }
+
+    private static func userForecast(_ servers: [Server], _ context: PollContext) -> Decimal? {
+        guard context.serverPrices.keys.contains(where: { id in servers.contains { $0.id == id } }) else { return nil }
+        return CostEstimator(pricing: nil, priceKind: context.priceKind, serverPrices: context.serverPrices)
+            .estimate(Inventory(servers: servers), now: context.now).forecast
     }
 
     private static func due(_ last: Date?, every interval: TimeInterval, now: Date) -> Bool {

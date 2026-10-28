@@ -103,7 +103,7 @@ final class Monitor {
     var problem: String? {
         let showsName = store.scope.count > 1
         for project in store.scope {
-            let text = pollers[project.id] == nil
+            let text = pollers[project.id] == nil && project.hasAPI
                 ? "The token for this project is missing from the Keychain. Add the project again."
                 : pollers[project.id]?.problem
             if let text { return showsName ? "\(project.name): \(text)" : text }
@@ -152,7 +152,9 @@ final class Monitor {
     }
 
     func costReport(for id: UUID) -> CostReport? {
-        guard settings.value.showsCosts, pricing != nil, let data = pollers[id]?.data, data.resourcesFetched != nil else { return nil }
+        guard settings.value.showsCosts, let poller = pollers[id], pricing != nil || !poller.hasAPI,
+              poller.data.resourcesFetched != nil else { return nil }
+        let data = poller.data
         return costEstimator(for: id).estimate(data.inventory, now: .now)
     }
 
@@ -164,7 +166,11 @@ final class Monitor {
         let ids = Set(store.projects.map(\.id))
         pollers = pollers.filter { ids.contains($0.key) }
         alertCenter.forget(projects: ids)
-        for project in store.projects where pollers[project.id]?.access != project.access || reloads.contains(project.id) {
+        for project in store.projects where !project.hasAPI && pollers[project.id] == nil {
+            pollers[project.id] = ProjectPoller(agentProject: project.id)
+            alertCenter.reloaded(project.id)
+        }
+        for project in store.projects where project.hasAPI && (pollers[project.id]?.access != project.access || reloads.contains(project.id)) {
             if let token = store.token(for: project) {
                 pollers[project.id] = ProjectPoller(projectID: project.id, token: token, access: project.access)
                 alertCenter.reloaded(project.id)
@@ -227,7 +233,7 @@ final class Monitor {
     private func pollAll() async {
         let now = Date.now
         if pricingFetched.map({ now.timeIntervalSince($0) > 86_400 }) ?? true,
-           let pricing = await pollers.values.first?.pricing() {
+           let pricing = await pollers.values.first(where: \.hasAPI)?.pricing() {
             self.pricing = pricing
             pricingFetched = now
         }
@@ -249,27 +255,68 @@ final class Monitor {
     private func poll(_ project: Project, _ poller: ProjectPoller, now: Date = .now, deliver: Bool = true) async {
         if let state = await alertCenter.restore(project.id) { poller.restore(state) }
         let serversKnown = !poller.data.servers.isEmpty
-        let reports = await agents.poll(project.id, servers: poller.data.servers)
+        let reports = await agents.poll(project.id, servers: poller.hasAPI ? poller.data.servers : hosts(project.id))
+        if !poller.hasAPI { learnHosts(project.id) }
         let context = PollContext(
             now: now, pricing: settings.value.showsCosts ? pricing : nil, priceKind: settings.value.priceKind,
             serverPrices: settings.value.serverPrices(for: project.id),
             alertSettings: settings.value.alertSettings(for: project), agents: reports
         )
-        let events = await poller.refresh(context)
-        if !serversKnown, !poller.data.servers.isEmpty {
+        let events = await poller.refresh(context, hosts: poller.hasAPI ? [] : hosts(project.id))
+        if poller.hasAPI, !serversKnown, !poller.data.servers.isEmpty {
             _ = await agents.poll(project.id, servers: poller.data.servers)
         }
         await alertCenter.collect(project: project, poller: poller, events: events, context: context) { serverID in
             subtitle(project, poller, serverID)
         }
         if poller.problem == nil {
-            uptime.record(poller.data, at: .now)
+            var data = poller.data
+            if !poller.hasAPI { data.servers = data.servers.filter { agents.link(project.id, $0.id)?.isPaired == true } }
+            uptime.record(data, at: .now)
         }
         if project.environment != .none, poller.problem == nil, poller.data.lastUpdated != nil {
             settings.adoptLegacyEnvironment(project.environment, project: project.id, servers: poller.data.servers)
             store.update(project.id) { $0.environment = .none }
         }
         if deliver { await deliverAlerts() }
+    }
+
+    private func hosts(_ id: UUID) -> [Server] {
+        (store.project(id)?.hosts ?? []).map { $0.server(link: agents.link(id, $0.id)) }
+    }
+
+    private func learnHosts(_ id: UUID) {
+        guard let project = store.project(id) else { return }
+        for host in project.hosts {
+            guard let snapshot = agents.state(id, host.id)?.snapshot else { continue }
+            var next = host
+            next.learn(snapshot)
+            if next != host { store.updateHost(id, host.id) { $0 = next } }
+        }
+    }
+
+    func refreshHosts(_ id: UUID, poll shouldPoll: Bool = true) {
+        guard let poller = pollers[id], !poller.hasAPI, let project = store.project(id) else { return }
+        poller.setHosts(hosts(id))
+        if shouldPoll { Task { await poll(project, poller) } }
+    }
+
+    func addHost(to id: UUID) -> Int64? {
+        guard let host = store.addHost(to: id) else { return nil }
+        refreshHosts(id)
+        return host
+    }
+
+    func removeHost(_ id: UUID, _ host: Int64) {
+        agents.remove(id, host)
+        store.removeHost(id, host)
+        refreshHosts(id)
+    }
+
+    func removeProject(_ project: Project) {
+        for host in project.hosts { agents.remove(project.id, host.id) }
+        store.remove(project)
+        projectChanged()
     }
 
     private func subtitle(_ project: Project, _ poller: ProjectPoller, _ serverID: Int64?) -> String {

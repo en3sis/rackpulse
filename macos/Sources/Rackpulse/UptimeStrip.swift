@@ -71,6 +71,7 @@ struct UptimeCard: View {
 
     let timeline: UptimeTimeline
     let hasAgent: Bool
+    var agentOnly = false
 
     @State private var span = Span.day
     @State private var hovered: Int?
@@ -155,6 +156,9 @@ struct UptimeCard: View {
         let source = hasAgent
             ? "From the agent on the server, which records every minute the server runs."
             : "From Hetzner's start and stop history and Rackpulse's own checks. A crash inside the server is not visible to Hetzner; the Rackpulse agent records it."
+        if agentOnly {
+            return coverage + "From the agent on the server, which records every minute the server runs. An orange mark means the server was running but had an alert. Hover the bars for details."
+        }
         return coverage + source + " Stops you made through Hetzner show in grey, and an orange mark means the server was running but had an alert. Hover the bars for details."
     }
 
