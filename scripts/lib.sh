@@ -124,6 +124,42 @@ content_type() {
 
 agent_files=(install.sh rackpulse-agent-linux-amd64 rackpulse-agent-linux-arm64 SHA256SUMS)
 
+DEV_AGENT=dist/dev-agent-version
+
+dev_flavor() {
+  local stamp site
+  stamp=$(date -u +%Y%m%d%H%M)
+  site=${SITE_URL:-https://rackpulse.app}
+  COMMIT=$(git rev-parse --short HEAD)
+  if [ -n "$(git status --porcelain)" ]; then COMMIT="$COMMIT+"; fi
+  export OUT=dist/dev APP_NAME="Rackpulse Dev" ICON=dist/dev/AppIcon COMMIT
+  export BUNDLE_ID=dev.rackpulse.mac.dev FLAVOR=dev
+  export APP_VERSION=$(version)-dev.$stamp BUILD_NUMBER=$(version).$stamp
+  export AGENT_VERSION=$(agent_version)-dev.$stamp AGENT_URL=$site/agent/dev AGENT_OUT=dist/dev/agent
+  APP=$OUT/$APP_NAME.app
+  DMG=$OUT/$APP_NAME.dmg
+}
+
+dev_icon() {
+  mkdir -p "$OUT"
+  if ! command -v rsvg-convert >/dev/null; then
+    export ICON=macos/Resources/AppIcon
+    return
+  fi
+  sed -e 's/cx="716" cy="716"/cx="716" cy="308"/' \
+    -e 's#</svg>#  <rect x="372" y="790" width="280" height="88" rx="44" fill="\#FF9F0A"/>\
+  <text x="512" y="854" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="60" font-weight="800" fill="\#FFFFFF">DEV</text>\
+</svg>#' macos/Resources/AppIcon.svg >"$ICON.svg"
+  scripts/appicon.sh
+}
+
+quit_dev_app() {
+  if pkill -x "$APP_NAME"; then
+    echo "Quit $APP_NAME"
+    while pgrep -x "$APP_NAME" >/dev/null; do sleep 0.2; done
+  fi
+}
+
 agent_version() {
   tr -d '[:space:]' <agent/VERSION
 }

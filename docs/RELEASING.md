@@ -102,7 +102,7 @@ The app and the agent keep separate versions. A new app works with older agents 
 
 ## Dev builds
 
-To try a change from start to finish (the app on your Mac and the agent on a test server) before a release:
+`make dev` and `make dev-build` both build Rackpulse Dev. `make dev` runs it locally in the foreground and offers the last uploaded dev agent. `make dev-build` also uploads, to try a change from start to finish (the app on your Mac and the agent on a test server):
 
 ```bash
 make dev-build              # build, notarize, upload app and agent
@@ -111,7 +111,7 @@ make dev-build NOTARIZE=0   # skip notarizing and the app download, upload only 
 
 | | Stable | Rackpulse Dev |
 |---|---|---|
-| App | `dist/Rackpulse.app`, `dev.rackpulse.mac` | `dist/dev/Rackpulse Dev.app`, `dev.rackpulse.mac.dev` |
+| App | Installed copy, `dev.rackpulse.mac` | `dist/dev/Rackpulse Dev.app`, `dev.rackpulse.mac.dev` |
 | Settings, database, Keychain | Its own | Its own. Runs next to the stable app |
 | Download | `download/Rackpulse.dmg` | `download/dev/Rackpulse-Dev.dmg` |
 | Agent commands | `agent/install.sh` | `agent/dev/install.sh` |

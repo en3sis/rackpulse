@@ -72,7 +72,7 @@ To report a security problem, see [SECURITY.md](SECURITY.md).
 You need Xcode 16 or later. For the agent you also need Go 1.23 or later.
 
 ```bash
-make dev          # build and run the app
+make dev          # build and run Rackpulse Dev, next to your installed app
 make test         # run the app tests
 make test-agent   # run the agent tests
 make help         # list all commands

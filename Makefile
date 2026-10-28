@@ -13,7 +13,7 @@ help: ## List the commands
 
 ##@ Develop
 
-dev: ## Build the app and run it in the foreground. Ctrl-C stops it
+dev: ## Build Rackpulse Dev and run it in the foreground. Ctrl-C stops it. Your installed Rackpulse keeps running
 	@scripts/dev.sh
 
 test: ## Run the HetznerKit unit tests
@@ -22,11 +22,11 @@ test: ## Run the HetznerKit unit tests
 test-agent: ## Vet and test the Linux agent
 	cd agent && go vet ./... && go test ./...
 
-stop: ## Stop the app
-	@pkill -x Rackpulse; true
+stop: ## Stop Rackpulse Dev
+	@pkill -x "Rackpulse Dev"; true
 
 clean: stop ## Remove build output. Released versions in dist/Rackpulse-<version>/ stay
-	rm -rf dist/Rackpulse.app dist/Rackpulse.dmg dist/dmg dist/feed dist/dev macos/.build packages/HetznerKit/.build
+	rm -rf dist/Rackpulse.app dist/Rackpulse.dmg dist/dmg dist/feed dist/dev dist/dev-agent-version macos/.build packages/HetznerKit/.build
 
 ##@ Build
 

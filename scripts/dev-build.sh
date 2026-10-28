@@ -15,28 +15,10 @@ prefix=${prefix%/}
 r2_check
 r2_setup
 
-stamp=$(date -u +%Y%m%d%H%M)
-commit=$(git rev-parse --short HEAD)
-if [ -n "$(git status --porcelain)" ]; then commit="$commit+"; fi
-
-export OUT=dist/dev APP_NAME="Rackpulse Dev" ICON=dist/dev/AppIcon
-export BUNDLE_ID=dev.rackpulse.mac.dev FLAVOR=dev COMMIT=$commit
-export APP_VERSION=$(version)-dev.$stamp BUILD_NUMBER=$(version).$stamp
-export AGENT_VERSION=$(agent_version)-dev.$stamp AGENT_URL=$site/agent/dev AGENT_OUT=dist/dev/agent
-APP=$OUT/$APP_NAME.app
-DMG=$OUT/$APP_NAME.dmg
-
-if pkill -x "$APP_NAME"; then
-  echo "Quit $APP_NAME"
-  while pgrep -x "$APP_NAME" >/dev/null; do sleep 0.2; done
-fi
+dev_flavor
+quit_dev_app
 rm -rf "$OUT"
-mkdir -p "$OUT"
-sed -e 's/cx="716" cy="716"/cx="716" cy="308"/' \
-  -e 's#</svg>#  <rect x="372" y="790" width="280" height="88" rx="44" fill="\#FF9F0A"/>\
-  <text x="512" y="854" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="60" font-weight="800" fill="\#FFFFFF">DEV</text>\
-</svg>#' macos/Resources/AppIcon.svg >"$ICON.svg"
-scripts/appicon.sh
+dev_icon
 
 scripts/agent.sh
 scripts/build.sh
@@ -56,11 +38,12 @@ done
 if [ "$notarize" != 0 ]; then
   put "$DMG" download/dev/Rackpulse-Dev.dmg application/x-apple-diskimage "no-cache"
 fi
+echo "$AGENT_VERSION" >"$DEV_AGENT"
 
 open "$APP"
 
 echo
-echo "Rackpulse Dev $APP_VERSION ($commit), agent $AGENT_VERSION"
+echo "Rackpulse Dev $APP_VERSION ($COMMIT), agent $AGENT_VERSION"
 echo "App:      $APP, now open"
 if [ "$notarize" != 0 ]; then echo "Download: $site/download/dev/Rackpulse-Dev.dmg"; fi
 echo "Agent:    curl -fsSL $site/agent/dev/install.sh | sudo sh -s -- --pair <key>"

@@ -13,12 +13,12 @@ Thanks for helping. Bug reports, ideas, and pull requests are all welcome.
 You need Xcode 16 or later for the app and Go 1.23 or later for the agent.
 
 ```bash
-make dev          # build and run the app; Ctrl-C stops it
+make dev          # build and run Rackpulse Dev; Ctrl-C stops it
 make test         # HetznerKit unit tests
 make test-agent   # agent vet and tests
 ```
 
-`make dev` signs with your Apple Development certificate when you have one, so the Keychain doesn't ask for access after every build. Without one, it signs ad hoc.
+`make dev` builds Rackpulse Dev, a separate app with its own settings and Keychain entries, so it runs next to an installed Rackpulse. It signs with your Apple Development certificate when you have one, so the Keychain doesn't ask for access after every build. Without one, it signs ad hoc.
 
 To see every screen without clicking through, run a dev build with `RACKPULSE_SNAPSHOTS=<folder>`. It waits for data, saves each screen in light and dark mode to `~/Downloads/<folder>`, and quits.
 
