@@ -189,6 +189,20 @@ struct AgentSetupView: View {
             waiting.padding(.top, 14)
             if stuck, let problem = state?.problem, let link { checks(problem, link) }
         }
+        if !editing {
+            HStack {
+                Spacer(minLength: 0)
+                Button(role: .destructive) {
+                    store.remove(project.id, server.id)
+                    if agentOnly { monitor.removeHost(project.id, server.id) }
+                    back()
+                } label: {
+                    Text(agentOnly ? "Remove server" : "Cancel setup").foregroundStyle(Theme.red)
+                }
+                .controlSize(.small)
+            }
+            .padding(.top, 14)
+        }
     }
 
     @ViewBuilder
