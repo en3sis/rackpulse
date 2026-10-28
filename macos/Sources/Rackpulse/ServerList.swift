@@ -379,6 +379,7 @@ struct ServerRow: View {
                 Text(server.name).font(.system(size: 14, weight: .semibold)).lineLimit(1)
                 EnvironmentBadge(environment: environment)
                 Text(meta).font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(1)
+                if server.agentOnly { AgentHostIcons(server: server, address: address) }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
@@ -386,8 +387,8 @@ struct ServerRow: View {
             }
 
             HStack(alignment: .top, spacing: 12) {
-                if server.agentOnly {
-                    metric("Load · 1 min", Format.load(agent?.host.load.first))
+                if server.agentOnly && cpu.isEmpty && agent != nil {
+                    metric("Load · 1 min", Format.load(agent?.host.load.first), help: "Update the agent to see CPU use.")
                 } else {
                 VStack(alignment: .leading, spacing: 3) {
                     caption("CPU · 1 h")
@@ -405,8 +406,11 @@ struct ServerRow: View {
                 if let agent, running {
                     let fullest = agent.disks.max { $0.usedFraction < $1.usedFraction }
                     metric("Memory", Format.percent(agent.memory.usedFraction * 100), warn: agent.memory.usedFraction >= 0.9)
-                    metric(fullest.map { "Disk \($0.mount)" } ?? "Disk", Format.percent(fullest.map { $0.usedFraction * 100 }),
-                           warn: (fullest?.usedFraction ?? 0) >= 0.9)
+                    metric("Disk", Format.percent(fullest.map { $0.usedFraction * 100 }),
+                           warn: (fullest?.usedFraction ?? 0) >= 0.9, help: fullest.map { "Fullest file system: \($0.mount)" })
+                } else if server.agentOnly {
+                    metric("Memory", "-")
+                    metric("Disk", "-")
                 } else {
                     metric("Disk I/O", running ? Format.iops(metrics?.totalIOPS.last?.value) : "-")
                     metric("Net out", running ? Format.rate(metrics?.points(MetricSeries.networkBandwidthOut).last?.value) : "-")
@@ -477,13 +481,14 @@ struct ServerRow: View {
         Text(text).font(.system(size: 11)).foregroundStyle(Theme.secondary)
     }
 
-    private func metric(_ title: String, _ value: String, warn: Bool = false) -> some View {
+    private func metric(_ title: String, _ value: String, warn: Bool = false, help: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            caption(title)
+            caption(title).lineLimit(1)
             Text(value).font(.system(size: 15, weight: .semibold)).rolling(value)
                 .foregroundStyle(warn ? Theme.orange : Theme.text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .help(help ?? "")
     }
 }
 
@@ -563,8 +568,9 @@ struct CompactServerRow: View {
 
     private var running: Bool { server.status == .running }
     private var load: Double? { agent?.host.load.first }
+    private var usesLoad: Bool { server.agentOnly && (metrics?.points(MetricSeries.cpu).isEmpty ?? true) && agent != nil }
     private var cpu: Double? {
-        if server.agentOnly { return load.map { $0 / Double(max(1, agent?.host.cores ?? 1)) * 100 } }
+        if usesLoad { return load.map { $0 / Double(max(1, agent?.host.cores ?? 1)) * 100 } }
         return metrics?.cpuPercent(cores: server.serverType.cores).last?.value
     }
 
@@ -575,7 +581,7 @@ struct CompactServerRow: View {
                 Text(server.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                 EnvironmentBadge(environment: environment)
                 Spacer(minLength: 8)
-                Text(server.agentOnly ? "Load \(Format.load(load))" : running ? Format.percent(cpu) : statusLabel)
+                Text(usesLoad ? "Load \(Format.load(load))" : running ? Format.percent(cpu) : statusLabel)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(running ? barColor : Theme.off)
                     .rolling(cpu)
@@ -593,8 +599,9 @@ struct CompactServerRow: View {
             HStack(spacing: 4) {
                 Text(server.meta(address: address))
                     .lineLimit(1)
+                if server.agentOnly { AgentHostIcons(server: server, address: address) }
                 Spacer(minLength: 8)
-                if server.agentOnly {
+                if usesLoad {
                     if let fullest = agent?.disks.max(by: { $0.usedFraction < $1.usedFraction }) {
                         Text("Disk \(Format.percent(fullest.usedFraction * 100))")
                     }
@@ -644,8 +651,34 @@ struct CompactServerRow: View {
 extension Server {
     func meta(address: String?) -> String {
         guard agentOnly else { return "\(serverType.name.uppercased()) · \(Format.place(location))" }
-        let parts = [serverType.name, address ?? ""].filter { !$0.isEmpty }
+        var parts: [String] = []
+        if serverType.cores > 0 { parts.append("\(Int(serverType.cores)) \(serverType.cores == 1 ? "core" : "cores")") }
+        if serverType.memory > 0 { parts.append(Format.memory(Int64(serverType.memory * 1_073_741_824))) }
         return parts.isEmpty ? "Waiting for the agent" : parts.joined(separator: " · ")
+    }
+}
+
+struct AgentHostIcons: View {
+    let server: Server
+    let address: String?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if !server.serverType.description.isEmpty {
+                icon("desktopcomputer", server.serverType.description)
+            }
+            if let address, !address.isEmpty {
+                icon("network", address)
+            }
+        }
+    }
+
+    private func icon(_ name: String, _ help: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 10))
+            .foregroundStyle(Theme.secondary)
+            .help(help)
+            .accessibilityLabel(help)
     }
 }
 

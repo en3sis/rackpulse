@@ -18,6 +18,7 @@ final class Monitor {
     private(set) var locked = false
 
     private var pricingFetched: Date?
+    private var agentBaselines: [UUID: (fetched: Date, values: [Int64: Double])] = [:]
     private var reloads: Set<UUID> = []
     private var loop: Task<Void, Never>?
     private var asleep = false
@@ -262,7 +263,9 @@ final class Monitor {
             serverPrices: settings.value.serverPrices(for: project.id),
             alertSettings: settings.value.alertSettings(for: project), agents: reports
         )
-        let events = await poller.refresh(context, hosts: poller.hasAPI ? [] : hosts(project.id))
+        let agentServers = poller.hasAPI ? [] : hosts(project.id)
+        let activity = poller.hasAPI ? (metrics: [:], baseline: [:]) : await agentActivity(project.id, agentServers)
+        let events = await poller.refresh(context, hosts: agentServers, activity: activity.metrics, baseline: activity.baseline)
         if poller.hasAPI, !serversKnown, !poller.data.servers.isEmpty {
             _ = await agents.poll(project.id, servers: poller.data.servers)
         }
@@ -283,6 +286,28 @@ final class Monitor {
 
     private func hosts(_ id: UUID) -> [Server] {
         (store.project(id)?.hosts ?? []).map { $0.server(link: agents.link(id, $0.id)) }
+    }
+
+    private func agentActivity(_ project: UUID, _ servers: [Server]) async -> (metrics: [Int64: ServerMetrics], baseline: [Int64: Double]) {
+        let now = Date.now
+        let answering = servers.filter { agents.state(project, $0.id).map { $0.snapshot != nil && $0.problem == nil } ?? false }
+        var metrics: [Int64: ServerMetrics] = [:]
+        for server in answering {
+            if let value = await agents.history(project, server.id, since: now.addingTimeInterval(-3_600))?.metrics(cores: server.serverType.cores) {
+                metrics[server.id] = value
+            }
+        }
+        if let saved = agentBaselines[project], now.timeIntervalSince(saved.fetched) < 3_600 {
+            return (metrics, saved.values)
+        }
+        var baseline: [Int64: Double] = [:]
+        for server in answering where metrics[server.id] != nil {
+            let week = await agents.history(project, server.id, since: now.addingTimeInterval(-7 * 86_400))?.metrics(cores: server.serverType.cores)
+            let values = (week?.totalIOPS ?? []).map(\.value).sorted()
+            if !values.isEmpty { baseline[server.id] = values[values.count / 2] }
+        }
+        agentBaselines[project] = (now, baseline)
+        return (metrics, baseline)
     }
 
     private func learnHosts(_ id: UUID) {

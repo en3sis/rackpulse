@@ -161,9 +161,9 @@ struct ServerDetailView: View {
                 .padding(.top, 6)
         }
         VStack(spacing: 14) {
-            if !server.agentOnly { cpuChart }
+            if showsActivity { cpuChart }
             if hasAgent { memoryChart }
-            if !server.agentOnly {
+            if showsActivity {
             pairChart(
                 title: "Disk IOPS", detail: "read / write",
                 first: ("Read", metrics?.points(MetricSeries.diskIOPSRead) ?? []),
@@ -176,6 +176,12 @@ struct ServerDetailView: View {
                 second: ("Out", metrics?.points(MetricSeries.networkBandwidthOut) ?? []),
                 format: Format.rate
             )
+            }
+            if server.agentOnly && hasAgent && metrics != nil && !showsActivity && monitor.agents.needsUpdate(project.id, server.id) {
+                Text("Update the agent on \(server.name) to see CPU, disk and network charts.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(.horizontal, 16)
@@ -400,6 +406,10 @@ struct ServerDetailView: View {
             .chartPlotStyle { $0.clipped() }
             .chartXAxis { timeAxis }
         }
+    }
+
+    private var showsActivity: Bool {
+        !server.agentOnly || metrics.map { !$0.points(MetricSeries.cpu).isEmpty } ?? false
     }
 
     private var hasAgent: Bool {
@@ -733,9 +743,8 @@ struct ServerDetailView: View {
 
     private var spec: String {
         if server.agentOnly {
-            let memory = snapshot.map { Format.memory($0.memory.total) }
-            let disk = snapshot?.disks.first { $0.mount == "/" }.map { Format.size($0.total) }
-            let parts = [server.serverType.name, memory ?? "", disk ?? "", project.name].filter { !$0.isEmpty }
+            let os = snapshot?.host.os ?? server.serverType.description.components(separatedBy: " · ").first ?? ""
+            let parts = [os, server.meta(address: nil), project.name].filter { !$0.isEmpty && $0 != "Waiting for the agent" }
             return parts.joined(separator: " · ")
         }
         let type = server.serverType
@@ -831,7 +840,12 @@ struct ServerDetailView: View {
 
     private func loadMetrics() async {
         if server.agentOnly {
-            await loadMemory()
+            let since = Date.now.addingTimeInterval(-range.seconds)
+            let history = hasAgent ? await monitor.agents.history(project.id, server.id, since: since) : nil
+            let samples = (history?.samples ?? []).filter { $0.t >= since }
+            memory = samples.map { MetricPoint(time: $0.t, value: $0.memory * 100) }
+            metrics = history?.metrics(cores: server.serverType.cores) ?? ServerMetrics(start: since, end: .now, step: 0, series: [:])
+            failed = false
             return
         }
         async let agentMemory: Void = loadMemory()

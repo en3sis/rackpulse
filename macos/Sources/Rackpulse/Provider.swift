@@ -103,7 +103,7 @@ struct AgentHost: Codable, Hashable, Identifiable {
             created: addedAt,
             publicNet: PublicNet(ipv4: isIPv6 ? nil : ip, ipv6: isIPv6 ? ip : nil, floatingIps: [], firewalls: nil),
             serverType: ServerType(
-                id: 0, name: summary, description: "",
+                id: 0, name: "", description: [os, hostname].compactMap { $0 }.joined(separator: " · "),
                 cores: Double(cores ?? 0), memory: Double(memory ?? 0) / 1_073_741_824, disk: Double(disk ?? 0) / 1_000_000_000,
                 prices: []
             ),

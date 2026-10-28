@@ -59,3 +59,16 @@ func TestSamplesRollUpToFiveMinutes(t *testing.T) {
 		t.Fatalf("five minute values %+v", r.Samples)
 	}
 }
+
+func TestFiveMinuteAverageKeepsActivity(t *testing.T) {
+	const bucket = int64(1761480000)
+	cpu := func(v float64) *float64 { return &v }
+	group := []Sample{{T: bucket, CPU: cpu(10)}, {T: bucket + 60, CPU: cpu(30)}, {T: bucket + 120}}
+	got := averageSamples(bucket, group)
+	if got.CPU == nil || *got.CPU != 20 {
+		t.Fatalf("cpu %v", got.CPU)
+	}
+	if got.NetInBytes != nil {
+		t.Fatalf("missing fields must stay missing, got %v", *got.NetInBytes)
+	}
+}

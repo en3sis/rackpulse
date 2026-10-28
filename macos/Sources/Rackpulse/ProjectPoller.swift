@@ -122,7 +122,8 @@ final class ProjectPoller {
         return names
     }
 
-    func refresh(_ context: PollContext, hosts: [Server] = []) async -> [AlertEvent] {
+    func refresh(_ context: PollContext, hosts: [Server] = [], activity: [Int64: ServerMetrics] = [:],
+                 baseline: [Int64: Double] = [:]) async -> [AlertEvent] {
         guard !isLoading else { return [] }
         isLoading = true
         defer { isLoading = false }
@@ -130,8 +131,10 @@ final class ProjectPoller {
         var next = data
         guard let client else {
             next.servers = hosts.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            next.metrics = activity
+            next.iopsBaseline = baseline
             next.resourcesFetched = now
-            let snapshot = PollSnapshot(time: now, servers: next.servers, metrics: [:], iopsBaseline: [:], actions: [],
+            let snapshot = PollSnapshot(time: now, servers: next.servers, metrics: activity, iopsBaseline: baseline, actions: [],
                                         volumes: nil, firewalls: nil, costForecast: Self.userForecast(next.servers, context), agents: context.agents)
             let (alerts, events) = RuleEngine(settings: context.alertSettings).evaluate(snapshot, state: next.alerts)
             next.alerts = alerts

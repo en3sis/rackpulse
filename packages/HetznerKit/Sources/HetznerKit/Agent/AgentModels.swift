@@ -327,6 +327,13 @@ public struct AgentHistory: Sendable, Hashable, Codable {
         public let swap: Double
         public let disk: Double
         public let load: Double
+        public var cpu: Double?
+        public var diskReadIOPS: Double?
+        public var diskWriteIOPS: Double?
+        public var diskReadBytes: Double?
+        public var diskWriteBytes: Double?
+        public var netInBytes: Double?
+        public var netOutBytes: Double?
 
         public init(t: Date, memory: Double, swap: Double, disk: Double, load: Double) {
             self.t = t
@@ -335,6 +342,27 @@ public struct AgentHistory: Sendable, Hashable, Codable {
             self.disk = disk
             self.load = load
         }
+    }
+
+    public var hasActivity: Bool {
+        samples.contains { $0.cpu != nil }
+    }
+
+    public func metrics(cores: Double) -> ServerMetrics? {
+        guard hasActivity, let first = samples.first, let last = samples.last else { return nil }
+        func series(_ value: (Sample) -> Double?) -> [MetricPoint] {
+            samples.compactMap { sample in value(sample).map { MetricPoint(time: sample.t, value: $0) } }
+        }
+        let scale = max(cores, 1)
+        return ServerMetrics(start: first.t, end: last.t, step: Double(step), series: [
+            MetricSeries.cpu: series { $0.cpu.map { $0 * scale } },
+            MetricSeries.diskIOPSRead: series(\.diskReadIOPS),
+            MetricSeries.diskIOPSWrite: series(\.diskWriteIOPS),
+            MetricSeries.diskBandwidthRead: series(\.diskReadBytes),
+            MetricSeries.diskBandwidthWrite: series(\.diskWriteBytes),
+            MetricSeries.networkBandwidthIn: series(\.netInBytes),
+            MetricSeries.networkBandwidthOut: series(\.netOutBytes),
+        ])
     }
 
     public func uptime(asOf date: Date) -> AgentUptime {

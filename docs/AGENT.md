@@ -171,14 +171,15 @@ Header `Authorization: Bearer <key>`.
   "coverageStart": 1758900000,
   "hours": { "1761476400": 60, "1761480000": 12 },
   "step": 300,
-  "samples": [ { "t": 1761479700, "memory": 0.62, "swap": 0, "disk": 0.51, "load": 0.2 } ]
+  "samples": [ { "t": 1761479700, "memory": 0.62, "swap": 0, "disk": 0.51, "load": 0.2, "cpu": 4.5,
+                 "diskReadIOPS": 0.2, "diskWriteIOPS": 3.1, "diskReadBytes": 820, "diskWriteBytes": 41000, "netInBytes": 1900, "netOutBytes": 1300 } ]
 }
 ```
 
 - `time`: the agent's current time. Use it to judge the current hour, which is not over yet.
 - `coverageStart`: from this time on, the agent knows when the server was running. Before it, nothing is known.
 - `hours`: for each hour that starts at or after `since`, the number of minutes the server was running. An hour after `coverageStart` that is missing had 0 running minutes.
-- `samples`: `memory`, `swap`, and `disk` are used fractions; `disk` is the fullest file system. With `since` in the last 24 hours, `step` is 60 and samples are one minute apart; otherwise `step` is 300.
+- `samples`: `memory`, `swap`, and `disk` are used fractions; `disk` is the fullest file system. `cpu` is the percent of the whole server from `/proc/stat`. The disk fields are per second over whole disks from `/proc/diskstats`, and the network fields bytes per second over network cards from `/proc/net/dev` (no loopback, bridges, Docker or VPN interfaces). Older agents leave them out. With `since` in the last 24 hours, `step` is 60 and samples are one minute apart; otherwise `step` is 300.
 - Without `since`, the response covers the full 31 days.
 
 ### `GET /v1/containers/history?name=<container name>&since=<time>`

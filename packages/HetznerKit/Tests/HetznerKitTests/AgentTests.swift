@@ -35,6 +35,20 @@ struct AgentTests {
         #expect(snapshot.host.tailscale == nil)
     }
 
+    @Test func agentHistoryBecomesServerMetrics() throws {
+        let json = #"{"coverageStart":1761400000,"step":60,"samples":[{"t":1761480000,"memory":0.5,"swap":0,"disk":0.4,"load":0.2,"cpu":25,"diskReadIOPS":3,"diskWriteIOPS":5,"netOutBytes":1200},{"t":1761480060,"memory":0.5,"swap":0,"disk":0.4,"load":0.2}]}"#
+        let history = try AgentJSON.decoder().decode(AgentHistory.self, from: Data(json.utf8))
+        let metrics = try #require(history.metrics(cores: 4))
+        #expect(metrics.cpuPercent(cores: 4).map(\.value) == [25])
+        #expect(metrics.totalIOPS.map(\.value) == [8])
+        #expect(metrics.points(MetricSeries.networkBandwidthOut).map(\.value) == [1200])
+
+        let old = try AgentJSON.decoder().decode(AgentHistory.self, from: Data(
+            #"{"coverageStart":1761400000,"step":60,"samples":[{"t":1761480000,"memory":0.5,"swap":0,"disk":0.4,"load":0.2}]}"#.utf8
+        ))
+        #expect(old.metrics(cores: 4) == nil)
+    }
+
     @Test func decodesTailscaleNameAndAddress() throws {
         let json = #"{"hostname":"web-1","os":"","kernel":"","arch":"","serverID":null,"bootTime":1758000000,"cores":2,"load":[],"tailscale":{"name":"web-1.tail0000.ts.net","ip":"100.64.0.7"}}"#
         let host = try AgentJSON.decoder().decode(AgentSnapshot.Host.self, from: Data(json.utf8))
