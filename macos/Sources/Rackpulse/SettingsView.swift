@@ -113,7 +113,7 @@ struct SettingsView: View {
                 page = .general
             }
         } message: { _ in
-            Text("Rackpulse stops watching this project and deletes its token from your Keychain. The project on Hetzner is not changed.")
+            Text("Rackpulse stops watching this project and deletes its token from your Keychain. Nothing changes on your servers or in the project itself.")
         }
     }
 }
@@ -454,7 +454,7 @@ private struct ServerEnvironmentsSection: View {
         } header: {
             Text("Server environments")
         } footer: {
-            Text("Automatic uses the server's env or environment label in Hetzner, for example env=prod. Production servers show a PROD tag in the list.")
+            Text("Automatic uses the server's env or environment label, for example env=prod. Production servers show a PROD tag in the list.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -648,7 +648,7 @@ private struct ProjectForm: View {
                 Text("Costs")
             } footer: {
                 if settings.value.showsCosts {
-                    Text("Rackpulse shows the budget on the Costs tab and alerts you when the month's forecast goes above it. For a server on an older price, enter the monthly price you pay. Leave it empty to use the list price, shown in grey. Amounts are in the currency of your Hetzner prices, without VAT.")
+                    Text("Rackpulse shows the budget on the Costs tab and alerts you when the month's forecast goes above it. For a server on an older price, enter the monthly price you pay. Leave it empty to use the list price, shown in grey. Amounts are in the currency of \(project.provider.name)'s prices, without VAT.")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -694,7 +694,7 @@ private struct ProjectForm: View {
             } header: {
                 Text("Remove project")
             } footer: {
-                Text("Rackpulse stops watching this project and deletes its token from your Keychain. The project on Hetzner is not changed.")
+                Text("Rackpulse stops watching this project and deletes its token from your Keychain. Nothing changes on your servers or in the project itself.")
                     .foregroundStyle(.secondary)
             }
         }

@@ -80,7 +80,10 @@ struct PopoverView: View {
         .onAppear { monitor.refreshIfStale() }
         .onChange(of: tab) { if tab != .costs { costProject = nil } }
         .onChange(of: store.showsAll) { costProject = nil }
-        .onChange(of: actions.opened) { costProject = nil }
+        .onChange(of: actions.opened, initial: true) {
+            costProject = nil
+            if monitor.settings.value.compactList { monitor.settings.value.compactList = false }
+        }
         .task(id: liveTarget) {
             guard let detail = liveTarget else { return }
             await monitor.live(detail.project, detail.server)
@@ -473,17 +476,17 @@ private struct RefreshIcon: View {
     let spinning: Bool
     let problem: Bool
     @State private var angle = 0.0
+    private static let turn = Duration.milliseconds(800)
 
     var body: some View {
         Image(systemName: problem ? "exclamationmark.arrow.circlepath" : "arrow.clockwise")
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(problem ? Theme.orange : Theme.secondary)
             .rotationEffect(.degrees(angle))
-            .onChange(of: spinning, initial: true) {
-                if spinning {
-                    withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) { angle = 360 }
-                } else {
-                    withAnimation(.default) { angle = 0 }
+            .task(id: spinning) {
+                while spinning, !Task.isCancelled {
+                    withAnimation(.linear(duration: 0.8)) { angle += 360 }
+                    try? await Task.sleep(for: Self.turn)
                 }
             }
     }

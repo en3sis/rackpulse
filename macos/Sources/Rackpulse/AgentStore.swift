@@ -77,7 +77,7 @@ enum AgentProblem: Equatable {
         case .agent(.invalidResponse):
             "The agent sent an answer Rackpulse does not understand. Update the agent."
         case .otherServer(let id):
-            "The agent at \(place) runs on another Hetzner server (ID \(id))."
+            "The agent at \(place) runs on another server (ID \(id))."
         case .noKey:
             "The pairing key is missing from the Keychain. Remove the agent and set it up again."
         }

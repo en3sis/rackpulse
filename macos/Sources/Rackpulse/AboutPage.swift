@@ -24,7 +24,7 @@ struct AboutPage: View {
                     }
                     Text(Flavor.isDev ? "Version \(Updates.version) (\(Flavor.commit))" : "Version \(Updates.version)")
                         .font(.system(size: 12)).foregroundStyle(.secondary)
-                    Text("A menu bar app for Hetzner Cloud.\nNo account, no analytics, no telemetry.")
+                    Text("A menu bar app for your servers.\nNo account, no analytics, no telemetry.")
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -44,7 +44,7 @@ struct AboutPage: View {
                         }
                     }
                     .padding(.top, 4)
-                    Text("MIT licence. Not affiliated with Hetzner Online GmbH.")
+                    Text("MIT licence. Not affiliated with any hosting provider.")
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
                         .padding(.top, 14)

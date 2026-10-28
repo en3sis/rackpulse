@@ -17,8 +17,13 @@ struct OnboardingView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Add a Hetzner Cloud project")
+                Text("Add a project")
                     .font(.system(size: 15, weight: .semibold))
+                HStack(spacing: 6) {
+                    Text("Provider").foregroundStyle(Theme.secondary)
+                    Text("Hetzner Cloud").fontWeight(.medium)
+                }
+                .font(.system(size: 12))
                 Text("Rackpulse needs an API token for each project.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.secondary)

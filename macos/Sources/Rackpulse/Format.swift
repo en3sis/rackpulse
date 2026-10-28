@@ -52,8 +52,11 @@ enum Format {
 
     static func ago(_ date: Date, now: Date) -> String {
         let seconds = max(0, Int(now.timeIntervalSince(date)))
-        if seconds < 60 { return "\(seconds) s ago" }
-        return "\(seconds / 60) min ago"
+        if seconds < 10 { return "just now" }
+        if seconds < 60 { return "\(seconds)s ago" }
+        if seconds < 3_600 { return "\(seconds / 60) min ago" }
+        if seconds < 86_400 { return "\(seconds / 3_600) h ago" }
+        return "\(plural(seconds / 86_400, "day")) ago"
     }
 
     static func place(_ location: Location) -> String {

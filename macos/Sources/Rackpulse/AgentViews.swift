@@ -185,7 +185,7 @@ struct AgentSetupView: View {
             card {
                 if macOnTailscale {
                     notice("checkmark.circle.fill", Theme.green, "Tailscale is on for this Mac",
-                           "The agent listens only on the server's Tailscale address. No Hetzner firewall rule is needed.")
+                           "The agent listens only on the server's Tailscale address. No cloud firewall rule is needed.")
                 } else {
                     notice("exclamationmark.circle.fill", Theme.orange, "Tailscale is not running on this Mac",
                            "Start Tailscale on this Mac. Rackpulse reaches \(server.name) through your tailnet.")
@@ -202,7 +202,7 @@ struct AgentSetupView: View {
                     field("Port") { portField }
                     caption("Your Mac must reach the private network, for example through a VPN server in it.")
                 } else {
-                    caption("\(server.name) is not in a Hetzner private network.")
+                    caption("\(server.name) is not in a private network.")
                 }
             }
         case .publicIP:
@@ -444,7 +444,7 @@ struct AgentSetupView: View {
     private var removal: some View {
         card(tint: Theme.red) {
             notice("trash", Theme.red, "Remove the agent",
-                   "Run this on the server to remove the agent, its user, its data and its ufw rule. Then remove any Hetzner firewall rule for the port.")
+                   "Run this on the server to remove the agent, its user, its data and its ufw rule. Then remove any cloud firewall rule for the port.")
             code("sudo rackpulse-agent uninstall", masked: false)
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
@@ -563,8 +563,7 @@ struct AgentSetupView: View {
     }
 
     private var firewallsURL: URL {
-        guard let id = project.consoleID else { return URL(string: "https://console.hetzner.com/projects")! }
-        return URL(string: "https://console.hetzner.com/projects/\(id)/firewalls")!
+        project.provider.firewallsURL(project)
     }
 
     private func lookUpMac() {

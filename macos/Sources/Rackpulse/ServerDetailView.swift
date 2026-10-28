@@ -542,7 +542,7 @@ struct ServerDetailView: View {
                     .reduce(Decimal(0)) { $0 + $1.monthToDate }
                 priceFact(user == nil ? "List price" : "Your price", monthly.map { "\(money($0, report.currency)) a month" } ?? "Unknown",
                           help: user == nil
-                              ? "Hetzner's list price for this server type. Click to enter the price you pay."
+                              ? "\(project.provider.name)'s list price for this server type. Click to enter the price you pay."
                               : "The monthly price you entered. Click to change or clear it.")
                 priceFact("Cost this month", money(spent, report.currency),
                           help: "Estimated cost of this server and its backups since the start of the month.")
@@ -725,7 +725,7 @@ struct ServerDetailView: View {
         guard let since = stateSince else { return nil }
         let date = since.date.formatted(date: .abbreviated, time: .shortened)
         let source = since.fromAction
-            ? "Counted from the last start, stop or restart made through Hetzner."
+            ? "Counted from the last start, stop or restart made through \(project.provider.name)."
             : "Counted from when the server was created. Restarts from inside the OS are not visible to the API."
         return "\(statusName) for \(Format.exactDuration(since: since.date)). Since \(date). \(source)"
     }
@@ -806,11 +806,6 @@ struct ServerDetailView: View {
         monitor.settings.value.alertSettings(for: project).rule(.sustainedCPU, server: server.id)?.threshold
     }
 
-    private var consoleURL: URL {
-        guard let id = project.consoleID else { return URL(string: "https://console.hetzner.com/projects")! }
-        return URL(string: "https://console.hetzner.com/projects/\(id)/servers/\(server.id)/overview")!
-    }
-
     private var ipv6: String? {
         guard let network = server.publicNet.ipv6?.ip else { return nil }
         return network.hasSuffix("::/64") ? network.replacingOccurrences(of: "::/64", with: "::1") : network
@@ -836,14 +831,10 @@ struct ServerDetailView: View {
                 monitor.settings.requestedPage = .project(project.id)
                 app.showSettings()
             }
-            QuickAction(
-                title: "Console",
-                icon: "arrow.up.right.square",
-                help: project.consoleID == nil
-                    ? "Opens your project list. Add the project's Console link in Settings to open this server directly."
-                    : "Open this server in the Hetzner Console"
-            ) {
-                NSWorkspace.shared.open(consoleURL)
+            ForEach(project.provider.serverLinks(server, project: project)) { link in
+                QuickAction(title: link.title, icon: link.icon, help: link.help) {
+                    NSWorkspace.shared.open(link.url)
+                }
             }
         }
     }
@@ -890,9 +881,9 @@ struct ServerDetailView: View {
                 try await monitor.power(action, server: server.id, project: project.id)
                 powerMessage = "\(action.title) sent. The status updates in a few seconds."
             } catch let error as HetznerError {
-                powerMessage = error.code.map { "Hetzner refused: \($0)." } ?? "Could not send \(action.title.lowercased())."
+                powerMessage = error.code.map { "\(project.provider.name) refused: \($0)." } ?? "Could not send \(action.title.lowercased())."
             } catch {
-                powerMessage = "Could not reach Hetzner."
+                powerMessage = "Could not reach \(project.provider.name)."
             }
             powering = false
             confirming = nil

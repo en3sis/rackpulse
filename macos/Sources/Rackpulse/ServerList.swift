@@ -46,7 +46,7 @@ struct ServerList: View {
         if let poller, poller.data.lastUpdated != nil {
             let servers = query.isEmpty ? sorted(poller) : sorted(poller).filter { Self.matches(project, poller, query, settings: monitor.settings).contains($0) }
             if servers.isEmpty {
-                EmptyLine(text: "No servers in this project yet.", link: ("Open Hetzner Console", URL(string: "https://console.hetzner.com/projects")!))
+                EmptyLine(text: "No servers in this project yet.", link: ("Open \(project.provider.consoleName)", project.provider.consoleURL(project)))
             }
             ForEach(Array(servers.enumerated()), id: \.element.id) { index, server in
                 let alert = poller.visibleAlerts.first { $0.id.hasSuffix(":\(server.id)") }

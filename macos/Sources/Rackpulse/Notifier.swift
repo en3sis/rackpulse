@@ -136,7 +136,7 @@ extension RuleKind {
         case .container: "A container is unhealthy, keeps restarting, or stopped with an error in the last hour."
         case .failedService: "A systemd service on the server is in the failed state."
         case .rebootRequired: "The server installed updates that need a reboot."
-        case .agentUnreachable: "Hetzner says the server is running, but the agent stops answering. The server may be frozen or out of memory."
+        case .agentUnreachable: "The provider reports the server as running, but the agent stops answering. The server may be frozen or out of memory."
         }
     }
 }
