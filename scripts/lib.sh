@@ -1,10 +1,12 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-APP=dist/Rackpulse.app
-DMG=dist/Rackpulse.dmg
+APP_NAME=${APP_NAME:-Rackpulse}
+OUT=${OUT:-dist}
+APP=$OUT/$APP_NAME.app
+DMG=$OUT/$APP_NAME.dmg
 FEED=dist/feed
-ICON=macos/Resources/AppIcon
+ICON=${ICON:-macos/Resources/AppIcon}
 ENTITLEMENTS=macos/Rackpulse.entitlements
 
 if [ -f .env ]; then
@@ -101,6 +103,26 @@ put() {
     -H "Content-Type: $3" -H "Cache-Control: $4" -T "$1" "$endpoint/$2" -o /dev/null
   echo "Uploaded $site/$2"
 }
+
+submit() {
+  local result
+  result=$(xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1)
+  echo "$result"
+  if ! echo "$result" | grep -q "status: Accepted"; then
+    echo "Notarization of $1 was not accepted"
+    exit 1
+  fi
+}
+
+content_type() {
+  case "$1" in
+    install.sh) echo "text/x-shellscript; charset=utf-8" ;;
+    SHA256SUMS) echo "text/plain; charset=utf-8" ;;
+    *) echo application/octet-stream ;;
+  esac
+}
+
+agent_files=(install.sh rackpulse-agent-linux-amd64 rackpulse-agent-linux-arm64 SHA256SUMS)
 
 agent_version() {
   tr -d '[:space:]' <agent/VERSION

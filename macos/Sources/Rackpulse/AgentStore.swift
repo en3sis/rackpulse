@@ -96,7 +96,7 @@ struct AgentState {
 @Observable
 final class AgentStore {
     static let latestVersion = Bundle.main.object(forInfoDictionaryKey: "RackpulseAgentVersion") as? String ?? ""
-    static let installURL = "https://rackpulse.app/agent/install.sh"
+    static let installURL = "\(Flavor.agentURL)/install.sh"
     private static let linksKey = "agentLinks"
     private static let historyInterval: TimeInterval = 900
 

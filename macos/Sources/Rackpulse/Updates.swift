@@ -16,7 +16,7 @@ final class Updates {
 
     init() {
         let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String ?? ""
-        guard !Self.isDev, !key.isEmpty else {
+        guard !Self.isDev, !Flavor.isDev, !key.isEmpty else {
             controller = nil
             return
         }

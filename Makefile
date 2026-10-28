@@ -6,7 +6,7 @@ BUMP ?= patch
 export SIGN_ID DEV_SIGN_ID NOTARY_PROFILE SPARKLE_ACCOUNT SITE_URL R2_ACCOUNT_ID R2_BUCKET R2_PREFIX R2_TOKEN R2_SECRET R2_ACCESS_KEY_ID
 
 .DEFAULT_GOAL := help
-.PHONY: help dev test test-agent stop clean build dmg agent appicon release notarize publish publish-agent
+.PHONY: help dev dev-build test test-agent stop clean build dmg agent appicon release notarize publish publish-agent
 
 help: ## List the commands
 	@awk 'BEGIN {FS = ":.*## "} /^##@/ {printf "\n%s\n", substr($$0, 5)} /^[a-z0-9-]+:.*## / {printf "  make %-14s %s\n", $$1, $$2}' $(filter-out .env,$(MAKEFILE_LIST))
@@ -26,7 +26,7 @@ stop: ## Stop the app
 	@pkill -x Rackpulse; true
 
 clean: stop ## Remove build output. Released versions in dist/Rackpulse-<version>/ stay
-	rm -rf dist/Rackpulse.app dist/Rackpulse.dmg dist/dmg dist/feed macos/.build packages/HetznerKit/.build
+	rm -rf dist/Rackpulse.app dist/Rackpulse.dmg dist/dmg dist/feed dist/dev macos/.build packages/HetznerKit/.build
 
 ##@ Build
 
@@ -41,6 +41,9 @@ agent: ## Build the Linux agent into dist/agent/<version>
 
 appicon: ## Rebuild macos/Resources/AppIcon.icns from AppIcon.svg
 	@scripts/appicon.sh
+
+dev-build: ## Build Rackpulse Dev and the dev agent, upload them to download/dev/ and agent/dev/. NOTARIZE=0 skips the download
+	@scripts/dev-build.sh
 
 ##@ Release
 

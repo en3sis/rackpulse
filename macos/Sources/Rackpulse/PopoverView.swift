@@ -182,6 +182,8 @@ struct PopoverView: View {
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { switcherFrame = $0 }
             .help("Switch project")
 
+            if Flavor.isDev { DevTag() }
+
             Spacer()
 
             if tab == .servers {

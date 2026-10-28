@@ -4,12 +4,13 @@ enum StatusIcon {
     private static let size = NSSize(width: 20, height: 16)
 
     static func image(dot: NSColor?) -> NSImage {
+        let dot = dot ?? (Flavor.isDev ? NSColor.systemGray : nil)
         let image = NSImage(size: size, flipped: false) { _ in
             let glyph = dot == nil ? NSColor.black : NSColor.labelColor
             glyph.setFill()
             rack().fill()
             if let dot {
-                let center = NSPoint(x: 15.5, y: 4)
+                let center = NSPoint(x: 15.5, y: Flavor.isDev ? 11.4 : 4)
                 NSGraphicsContext.current?.compositingOperation = .clear
                 NSBezierPath(ovalIn: NSRect(x: center.x - 4.6, y: center.y - 4.6, width: 9.2, height: 9.2)).fill()
                 NSGraphicsContext.current?.compositingOperation = .sourceOver
@@ -19,7 +20,7 @@ enum StatusIcon {
             return true
         }
         image.isTemplate = dot == nil
-        image.accessibilityDescription = "Rackpulse"
+        image.accessibilityDescription = Flavor.name
         return image
     }
 

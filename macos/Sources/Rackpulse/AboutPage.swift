@@ -18,8 +18,12 @@ struct AboutPage: View {
                         .resizable()
                         .frame(width: 96, height: 96)
                         .padding(.bottom, 8)
-                    Text("Rackpulse").font(.system(size: 22, weight: .semibold))
-                    Text("Version \(Updates.version)").font(.system(size: 12)).foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text(Flavor.name).font(.system(size: 22, weight: .semibold))
+                        if Flavor.isDev { DevTag() }
+                    }
+                    Text(Flavor.isDev ? "Version \(Updates.version) (\(Flavor.commit))" : "Version \(Updates.version)")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
                     Text("A menu bar app for Hetzner Cloud.\nNo account, no analytics, no telemetry.")
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
@@ -63,7 +67,7 @@ struct AboutPage: View {
                         Button("Check for Updates…") { updates.check() }
                     }
                 } else {
-                    Text("Updates are off in development builds.").foregroundStyle(.secondary)
+                    Text(Flavor.isDev ? "Rackpulse Dev does not update itself. Run make dev-build for a new build." : "Updates are off in development builds.").foregroundStyle(.secondary)
                 }
             } header: {
                 Text("Updates")

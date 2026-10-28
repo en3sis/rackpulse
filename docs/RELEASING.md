@@ -100,6 +100,27 @@ The app offers the agent in `agent/VERSION` as the latest one. `make build` writ
 
 The app and the agent keep separate versions. A new app works with older agents and skips what they don't support, so an app release does not need a new agent.
 
+## Dev builds
+
+To try a change from start to finish (the app on your Mac and the agent on a test server) before a release:
+
+```bash
+make dev-build              # build, notarize, upload app and agent
+make dev-build NOTARIZE=0   # skip notarizing and the app download, upload only the agent
+```
+
+| | Stable | Rackpulse Dev |
+|---|---|---|
+| App | `dist/Rackpulse.app`, `dev.rackpulse.mac` | `dist/dev/Rackpulse Dev.app`, `dev.rackpulse.mac.dev` |
+| Settings, database, Keychain | Its own | Its own. Runs next to the stable app |
+| Download | `download/Rackpulse.dmg` | `download/dev/Rackpulse-Dev.dmg` |
+| Agent commands | `agent/install.sh` | `agent/dev/install.sh` |
+| Versions | `VERSION`, `agent/VERSION` | Both plus `-dev.<UTC time>`, so each new dev build shows the agent update notice |
+| Updates | Sparkle | Off. Run `make dev-build` again |
+| How to tell | | DEV tag in the panel and About, status dot at the top of the menu bar icon, DEV app icon |
+
+Dev files live under `download/` and `agent/`, which publishing the website keeps. They are uploaded with `no-cache`. Install the dev agent on a test server only: it replaces the agent already there.
+
 ## Compatibility rules
 
 Users go back to older versions, and servers run older agents. Every change keeps both working.

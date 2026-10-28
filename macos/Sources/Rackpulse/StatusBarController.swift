@@ -64,7 +64,7 @@ final class StatusBarController: NSObject {
             button.target = self
             button.action = #selector(toggle)
             button.sendAction(on: [.leftMouseDown, .rightMouseDown])
-            button.toolTip = "Rackpulse"
+            button.toolTip = Flavor.name
         }
         actions.openPanel = { [weak self] in self?.show() }
         panel.onCancel = { [weak self] in self?.close() }

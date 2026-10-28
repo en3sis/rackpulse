@@ -9,16 +9,6 @@ if [ "$SIGN_ID" = "-" ]; then
   exit 1
 fi
 
-submit() {
-  local result
-  result=$(xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1)
-  echo "$result"
-  if ! echo "$result" | grep -q "status: Accepted"; then
-    echo "Notarization of $1 was not accepted"
-    exit 1
-  fi
-}
-
 release=$(version)
 folder=$(release_dir "$release")
 image=$folder/Rackpulse-$release.dmg
