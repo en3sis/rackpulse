@@ -116,7 +116,7 @@ make dev-build NOTARIZE=0   # skip notarizing and the app download, upload only 
 | Download | `download/Rackpulse.dmg` | `download/dev/Rackpulse-Dev.dmg` |
 | Agent commands | `agent/install.sh` | `agent/dev/install.sh` |
 | Versions | `VERSION`, `agent/VERSION` | Both plus `-dev.<UTC time>`, so each new dev build shows the agent update notice |
-| Updates | Sparkle | Off. Run `make dev-build` again |
+| Updates | Sparkle | Run `make dev-build` again. It quits Rackpulse Dev, rebuilds it in place and opens it. Servers show the agent update notice |
 | How to tell | | DEV tag in the panel and About, status dot at the top of the menu bar icon, DEV app icon |
 
 Dev files live under `download/` and `agent/`, which publishing the website keeps. They are uploaded with `no-cache`. Install the dev agent on a test server only: it replaces the agent already there.

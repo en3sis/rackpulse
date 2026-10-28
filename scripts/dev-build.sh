@@ -26,6 +26,10 @@ export AGENT_VERSION=$(agent_version)-dev.$stamp AGENT_URL=$site/agent/dev AGENT
 APP=$OUT/$APP_NAME.app
 DMG=$OUT/$APP_NAME.dmg
 
+if pkill -x "$APP_NAME"; then
+  echo "Quit $APP_NAME"
+  while pgrep -x "$APP_NAME" >/dev/null; do sleep 0.2; done
+fi
 rm -rf "$OUT"
 mkdir -p "$OUT"
 sed -e 's/cx="716" cy="716"/cx="716" cy="308"/' \
@@ -53,9 +57,11 @@ if [ "$notarize" != 0 ]; then
   put "$DMG" download/dev/Rackpulse-Dev.dmg application/x-apple-diskimage "no-cache"
 fi
 
+open "$APP"
+
 echo
 echo "Rackpulse Dev $APP_VERSION ($commit), agent $AGENT_VERSION"
-echo "App:      open \"$APP\""
+echo "App:      $APP, now open"
 if [ "$notarize" != 0 ]; then echo "Download: $site/download/dev/Rackpulse-Dev.dmg"; fi
 echo "Agent:    curl -fsSL $site/agent/dev/install.sh | sudo sh -s -- --pair <key>"
 echo "          Rackpulse Dev shows the full command with the key"
