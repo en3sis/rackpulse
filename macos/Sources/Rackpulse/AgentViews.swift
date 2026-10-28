@@ -31,6 +31,7 @@ struct AgentSetupView: View {
     @State private var macAddress: String?
     @State private var lookingUp = false
     @State private var macOnTailscale = MacNetwork.onTailscale
+    @State private var tailnetSuffix: String?
 
     private var store: AgentStore { monitor.agents }
     private var link: AgentLink? { store.link(project.id, server.id) }
@@ -55,10 +56,14 @@ struct AgentSetupView: View {
     private var host: String {
         if agentOnly, route == .publicIP || route == .privateNetwork { return custom.trimmingCharacters(in: .whitespaces) }
         return switch route {
-        case .tailscale: tailnetHost.trimmingCharacters(in: .whitespaces)
+        case .tailscale: MacNetwork.tailnetName(tailnetHost.isEmpty ? baseName : tailnetHost, suffix: tailnetSuffix)
         case .other: custom.trimmingCharacters(in: .whitespaces)
         case .privateNetwork, .publicIP: address.host(for: server) ?? ""
         }
+    }
+
+    private var baseName: String {
+        agentOnly ? monitor.store.project(project.id)?.host(server.id)?.name ?? "" : server.name
     }
 
     private var command: String? {
@@ -85,6 +90,8 @@ struct AgentSetupView: View {
         .onChange(of: custom) { save() }
         .onChange(of: port) { save() }
         .onChange(of: onlyThisMac) { lookUpMac() }
+        .onChange(of: tailnetSuffix) { save() }
+        .task { tailnetSuffix = await MacNetwork.tailnetSuffix() }
         .onChange(of: paired) { if agentOnly && paired { monitor.refreshHosts(project.id) } }
         .task(id: link?.endpoint) {
             tries = 0
@@ -235,9 +242,14 @@ struct AgentSetupView: View {
                            "Start Tailscale on this Mac. Rackpulse reaches \(server.name) through your tailnet.")
                 }
                 Divider()
-                field("Server") { TextField(server.name, text: $tailnetHost).frame(width: 180) }
+                field("Server") {
+                    TextField(MacNetwork.tailnetName(baseName, suffix: tailnetSuffix).nonEmpty ?? "web-1 or 100.x.y.z", text: $tailnetHost)
+                        .frame(width: 220)
+                }
                 field("Port") { portField }
-                caption("Its MagicDNS name or Tailscale IP address.")
+                caption(host.isEmpty
+                        ? "The server's name in Tailscale or its 100.x address."
+                        : "Rackpulse connects to \(host). Type another name or a 100.x address if the server has a different name in Tailscale.")
             }
         case .privateNetwork:
             card {
@@ -409,6 +421,10 @@ struct AgentSetupView: View {
                 row("Connection", link.address.title)
                 Divider()
                 row("Address", link.endpoint.display)
+                if let name = state?.snapshot?.host.tailscale?.name, !name.isEmpty, name != link.endpoint.host {
+                    Divider()
+                    row("Tailscale name", name)
+                }
                 if let version = link.version {
                     Divider()
                     row("Version", version)
@@ -623,7 +639,7 @@ struct AgentSetupView: View {
     }
 
     private func load() {
-        tailnetHost = agentOnly ? "" : server.name
+        tailnetHost = ""
         publicAddress = publicAddresses.first ?? .publicIPv4
         if let link {
             apply(link)

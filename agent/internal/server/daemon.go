@@ -69,7 +69,7 @@ func Run(version string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	collector := collect.New(version)
+	collector := collect.New(version, cfg.TailscaleName)
 	go collector.Run(ctx, func(snapshot collect.Snapshot) {
 		host.AddSample(history.SampleFrom(snapshot), snapshot.Time)
 		if snapshot.Docker != nil && snapshot.Docker.Error == nil {

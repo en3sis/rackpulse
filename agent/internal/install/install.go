@@ -71,6 +71,9 @@ func Run(args []string, version string) error {
 			cfg.Listen = address
 		}
 	}
+	if name := tailscaleName(); name != "" {
+		cfg.TailscaleName = name
+	}
 	if cfg.Token == "" {
 		return errors.New("No pairing key. Run the command from Rackpulse, which includes --pair rb1_...")
 	}

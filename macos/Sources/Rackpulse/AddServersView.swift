@@ -96,13 +96,14 @@ struct AgentServerForm: View {
 
     private var agentProjects: [Project] { monitor.store.projects.filter { !$0.hasAPI } }
     private var trimmedProject: String { projectName.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var canAdd: Bool { selection != nil || !trimmedProject.isEmpty }
+    private var canAdd: Bool { (selection != nil || !trimmedProject.isEmpty) && !trimmedServer.isEmpty }
+    private var trimmedServer: String { serverName.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
                 FormTitle(text: "Add a server with the agent", back: back)
-                Text("Next you choose how this Mac reaches the server and get the install command. The name, OS, cores, memory and disk come from the agent after pairing.")
+                Text("Next you get the install command. Rackpulse finds the server by its name and pairs as soon as the agent runs. OS, cores, memory and disk come from the agent.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -125,9 +126,12 @@ struct AgentServerForm: View {
                 }
             }
             field("Server name") {
-                TextField("Optional, the server's hostname by default", text: $serverName)
+                TextField("web-1", text: $serverName)
                     .textFieldStyle(.roundedBorder)
             }
+            Text("Its name in Tailscale or on your network, usually its hostname.")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.secondary)
 
             HStack {
                 if let cancel {
@@ -162,11 +166,8 @@ struct AgentServerForm: View {
             monitor.projectChanged()
         }
         guard let host = monitor.addHost(to: id) else { return }
-        let name = serverName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !name.isEmpty {
-            monitor.store.updateHost(id, host) { $0.name = name }
-            monitor.refreshHosts(id, poll: false)
-        }
+        monitor.store.updateHost(id, host) { $0.name = trimmedServer }
+        monitor.refreshHosts(id, poll: false)
         monitor.store.selectedID = id
         added(id, host)
     }

@@ -41,8 +41,20 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
         public let bootTime: Date
         public let cores: Int
         public let load: [Double]
+        public let tailscale: Tailscale?
 
-        public init(hostname: String, os: String, kernel: String, arch: String, serverID: Int64?, bootTime: Date, cores: Int, load: [Double]) {
+        public struct Tailscale: Sendable, Hashable, Codable {
+            public let name: String?
+            public let ip: String?
+
+            public init(name: String?, ip: String?) {
+                self.name = name
+                self.ip = ip
+            }
+        }
+
+        public init(hostname: String, os: String, kernel: String, arch: String, serverID: Int64?, bootTime: Date, cores: Int, load: [Double],
+                    tailscale: Tailscale? = nil) {
             self.hostname = hostname
             self.os = os
             self.kernel = kernel
@@ -51,6 +63,7 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
             self.bootTime = bootTime
             self.cores = cores
             self.load = load
+            self.tailscale = tailscale
         }
     }
 

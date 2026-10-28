@@ -12,12 +12,14 @@
 - Agent data shows right after Rackpulse starts, instead of after the first check interval.
 - While a server's page is open, its agent is read every 5 seconds.
 - Add servers that run only the agent, with no provider account: home lab, bare metal or any cloud. They live in their own projects. Power controls, traffic and the Console are not available for them, and they count in Costs only with a price you enter.
+- On a Mac with Tailscale, the agent setup finds the server by its name in your tailnet, so you no longer type an address. A server that is not paired yet can be removed from its setup page.
 - The server list opens in the detailed view each time. The refresh icon finishes its turn, and the label reads "Updated 12s ago".
 
 ### Agent
 
 - `--listen tailscale` listens on the server's Tailscale address.
 - If ufw is active, the installer allows the agent's port, and uninstall removes the rule.
+- The installer saves the server's Tailscale MagicDNS name, and the agent reports it with its Tailscale address.
 
 ## 0.2.2
 

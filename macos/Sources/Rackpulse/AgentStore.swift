@@ -276,6 +276,18 @@ final class AgentStore {
         saveUptime()
     }
 
+    @discardableResult
+    private func adoptTailscaleName(_ key: String, _ snapshot: AgentSnapshot) -> Bool {
+        guard let link = links[key], link.address == .tailscale,
+              let name = snapshot.host.tailscale?.name, !name.isEmpty,
+              !link.endpoint.host.contains("."), !link.endpoint.host.contains(":"),
+              link.endpoint.host.lowercased() != name.lowercased()
+        else { return false }
+        links[key]?.endpoint.host = name
+        clients[key] = nil
+        return true
+    }
+
     func tryPair(_ project: UUID, server: Int64) async {
         let key = Self.key(project, server)
         guard let link = links[key], !link.isPaired, !pairing.contains(key) else { return }
@@ -301,6 +313,7 @@ final class AgentStore {
             clients[key] = client
             states[key] = AgentState(snapshot: snapshot, seen: .now)
             historyFetched[key] = nil
+            adoptTailscaleName(key, snapshot)
             persist()
             await refreshHistory(key, client: client)
         } catch let error as AgentError {
@@ -358,6 +371,7 @@ final class AgentStore {
                 fail(key, .otherServer(snapshot.host.serverID ?? 0))
             case .success(let snapshot):
                 states[key] = AgentState(snapshot: snapshot, seen: .now)
+                if adoptTailscaleName(key, snapshot) { persist() }
                 if links[key]?.version != snapshot.version {
                     links[key]?.version = snapshot.version
                     persist()

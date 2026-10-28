@@ -10,14 +10,15 @@ import (
 )
 
 type HostInfo struct {
-	Hostname string     `json:"hostname"`
-	OS       string     `json:"os"`
-	Kernel   string     `json:"kernel"`
-	Arch     string     `json:"arch"`
-	ServerID *int64     `json:"serverID"`
-	BootTime int64      `json:"bootTime"`
-	Cores    int        `json:"cores"`
-	Load     [3]float64 `json:"load"`
+	Hostname  string         `json:"hostname"`
+	OS        string         `json:"os"`
+	Kernel    string         `json:"kernel"`
+	Arch      string         `json:"arch"`
+	ServerID  *int64         `json:"serverID"`
+	BootTime  int64          `json:"bootTime"`
+	Cores     int            `json:"cores"`
+	Load      [3]float64     `json:"load"`
+	Tailscale *TailscaleInfo `json:"tailscale,omitempty"`
 }
 
 type MemoryInfo struct {

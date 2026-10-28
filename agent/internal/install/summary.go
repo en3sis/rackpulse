@@ -20,6 +20,9 @@ func printSummary(cfg config.Config, summary installSummary, version string) {
 	} else {
 		fmt.Printf("It listens on TCP port %d on %s.\n", cfg.Port, cfg.Listen)
 	}
+	if cfg.TailscaleName != "" {
+		fmt.Printf("Tailscale name: %s\n", cfg.TailscaleName)
+	}
 	switch {
 	case summary.migrated:
 		line := "Replaced " + legacyName + " with " + serviceName + "."

@@ -7,26 +7,23 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/en3sis/rackpulse/agent/internal/collect"
 	"github.com/en3sis/rackpulse/agent/internal/config"
 )
 
 const tailscaleListen = "tailscale"
 
 func isTailscaleAddress(ip net.IP) bool {
-	_, v4, _ := net.ParseCIDR("100.64.0.0/10")
-	_, v6, _ := net.ParseCIDR("fd7a:115c:a1e0::/48")
-	return v4.Contains(ip) || v6.Contains(ip)
+	return collect.IsTailscaleAddress(ip)
+}
+
+func tailscaleName() string {
+	return collect.TailscaleName([]byte(commandOutput("tailscale", "status", "--json")))
 }
 
 func tailscaleAddress() (string, error) {
-	if iface, err := net.InterfaceByName("tailscale0"); err == nil {
-		if addrs, err := iface.Addrs(); err == nil {
-			for _, addr := range addrs {
-				if network, ok := addr.(*net.IPNet); ok && network.IP.To4() != nil && isTailscaleAddress(network.IP) {
-					return network.IP.String(), nil
-				}
-			}
-		}
+	if ip := collect.TailscaleIPv4(); ip != "" {
+		return ip, nil
 	}
 	if ip := net.ParseIP(commandOutput("tailscale", "ip", "-4")); ip != nil && isTailscaleAddress(ip) {
 		return ip.String(), nil

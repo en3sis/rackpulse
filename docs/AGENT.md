@@ -31,7 +31,7 @@ The script downloads the binary for the server's architecture from `rackpulse.ap
 
 1. Copies itself to `/usr/local/bin/rackpulse-agent`.
 2. Creates the system user `rackpulse` and adds it to the `docker` group if Docker is installed.
-3. Writes `/etc/rackpulse-agent/config.json` (mode 0640, `root:rackpulse`) with the key, port, and address.
+3. Writes `/etc/rackpulse-agent/config.json` (mode 0640, `root:rackpulse`) with the key, port, address, and the server's MagicDNS name if Tailscale runs on it (`tailscale status --json`).
 4. Creates a self-signed TLS certificate in `/var/lib/rackpulse-agent`.
 5. Reads past boots from the system journal, so the uptime history starts with the last 30 days.
 6. Installs and starts `rackpulse-agent.service`.
@@ -147,6 +147,7 @@ Header `Authorization: Bearer <key>`. The current state, collected every 60 seco
 ```
 
 - `serverID` is the Hetzner server ID from the metadata service, or `null`.
+- `tailscale` is left out when Tailscale does not run on the server. Otherwise `name` is the MagicDNS name saved at install and `ip` the current address of `tailscale0`. Rackpulse uses them to keep reaching the server over Tailscale.
 - `disks` lists block-device file systems, one entry per device. `readOnly` is the file system's own state, so it is `true` only when the file system is mounted read-only on the server. `inodesTotal` and `inodesUsed` are 0 on file systems without fixed inodes, such as btrfs.
 - `docker` is `null` when Docker is not installed. `error` is set when the socket exists but cannot be read.
 - `project` is the Docker Compose project label, or `null`.

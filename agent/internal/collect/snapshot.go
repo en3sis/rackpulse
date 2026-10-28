@@ -25,6 +25,7 @@ type Collector struct {
 
 	mu        sync.Mutex
 	serverID  *int64
+	tailscale string
 	snapshot  []byte
 	ready     chan struct{}
 	readyOnce sync.Once
@@ -34,9 +35,10 @@ type Collector struct {
 	serverIDTried chan struct{}
 }
 
-func New(version string) *Collector {
+func New(version, tailscaleName string) *Collector {
 	return &Collector{
 		version:       version,
+		tailscale:     tailscaleName,
 		docker:        newDockerCollector(),
 		ready:         make(chan struct{}),
 		diskTried:     make(chan struct{}),
@@ -98,6 +100,7 @@ func (c *Collector) collect(ctx context.Context, onSnapshot func(Snapshot)) {
 	c.mu.Lock()
 	snapshot.Host.ServerID = c.serverID
 	c.mu.Unlock()
+	snapshot.Host.Tailscale = tailscaleInfo(c.tailscale)
 
 	data, err := json.Marshal(snapshot)
 	if err != nil {

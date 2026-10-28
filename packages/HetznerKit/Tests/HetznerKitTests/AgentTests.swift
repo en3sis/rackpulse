@@ -32,6 +32,14 @@ struct AgentTests {
             #"{"coverageStart":1761400000,"hours":{"1761476400":60},"step":300,"samples":[]}"#.utf8
         ))
         #expect(history.hours[1_761_476_400] == 60)
+        #expect(snapshot.host.tailscale == nil)
+    }
+
+    @Test func decodesTailscaleNameAndAddress() throws {
+        let json = #"{"hostname":"web-1","os":"","kernel":"","arch":"","serverID":null,"bootTime":1758000000,"cores":2,"load":[],"tailscale":{"name":"web-1.tail0000.ts.net","ip":"100.64.0.7"}}"#
+        let host = try AgentJSON.decoder().decode(AgentSnapshot.Host.self, from: Data(json.utf8))
+        #expect(host.tailscale?.name == "web-1.tail0000.ts.net")
+        #expect(host.tailscale?.ip == "100.64.0.7")
     }
 
     @Test func stoppedContainersAreNeverUnhealthy() {
