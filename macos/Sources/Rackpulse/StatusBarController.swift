@@ -12,6 +12,7 @@ final class AppActions {
     var screenHeight: CGFloat = 800
     var chartRange: MetricRange?
     var opened = 0
+    var visible = false
     var shortcutChanged: () -> Void = {}
 }
 
@@ -114,6 +115,7 @@ final class StatusBarController: NSObject {
         panel.setFrame(frame, display: true)
         layoutContent()
         actions.opened += 1
+        actions.visible = true
         panel.makeKeyAndOrderFront(nil)
         item.button?.highlight(true)
         DispatchQueue.main.async { [weak self] in self?.keepHighlight() }
@@ -139,6 +141,7 @@ final class StatusBarController: NSObject {
     func close() {
         if panel.isVisible { closedAt = .now }
         panel.orderOut(nil)
+        actions.visible = false
         item.button?.highlight(false)
         if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         clickMonitor = nil

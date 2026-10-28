@@ -81,6 +81,17 @@ final class Monitor {
         }
     }
 
+    func live(_ project: UUID, _ server: Int64) async {
+        var first = true
+        while !Task.isCancelled {
+            if !asleep, pollers[project]?.data.servers.first(where: { $0.id == server })?.status == .running {
+                await agents.refreshLive(project, server, history: first)
+                first = false
+            }
+            try? await Task.sleep(for: .seconds(5))
+        }
+    }
+
     func refreshIfStale() {
         for project in store.scope {
             guard let poller = pollers[project.id] else { continue }

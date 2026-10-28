@@ -10,6 +10,11 @@ struct DetailTarget: Equatable {
     var container: String?
 }
 
+struct LiveTarget: Hashable {
+    let project: UUID
+    let server: Int64
+}
+
 struct PopoverView: View {
     let store: ProjectStore
     let monitor: Monitor
@@ -36,6 +41,11 @@ struct PopoverView: View {
 
     private var maxMainHeight: CGFloat {
         actions.screenHeight - 70
+    }
+
+    private var liveTarget: LiveTarget? {
+        guard actions.visible, let detail else { return nil }
+        return LiveTarget(project: detail.project, server: detail.server)
     }
 
     private var showsCosts: Bool {
@@ -71,6 +81,10 @@ struct PopoverView: View {
         .onChange(of: tab) { if tab != .costs { costProject = nil } }
         .onChange(of: store.showsAll) { costProject = nil }
         .onChange(of: actions.opened) { costProject = nil }
+        .task(id: liveTarget) {
+            guard let detail = liveTarget else { return }
+            await monitor.live(detail.project, detail.server)
+        }
         .onChange(of: actions.route) {
             guard let route = actions.route else { return }
             switch route {

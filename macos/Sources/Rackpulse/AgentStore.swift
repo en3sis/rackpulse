@@ -109,6 +109,7 @@ final class AgentStore {
     @ObservationIgnored private var clients: [String: AgentClient] = [:]
     @ObservationIgnored private var historyFetched: [String: Date] = [:]
     @ObservationIgnored private var pairing: Set<String> = []
+    @ObservationIgnored private var refreshing: Set<String> = []
     @ObservationIgnored private let uptimeURL: URL
 
     init() {
@@ -371,6 +372,27 @@ final class AgentStore {
             }
         }
         return reports
+    }
+
+    func refreshLive(_ project: UUID, _ server: Int64, history: Bool) async {
+        let key = Self.key(project, server)
+        guard let link = links[key], link.isPaired, !link.isRotating, !refreshing.contains(key),
+              let client = client(key, link: link)
+        else { return }
+        refreshing.insert(key)
+        defer { refreshing.remove(key) }
+        guard let snapshot = try? await client.snapshot().normalized(),
+              snapshot.host.serverID.map({ $0 == server }) ?? true,
+              links[key]?.endpoint == link.endpoint
+        else { return }
+        states[key] = AgentState(snapshot: snapshot, seen: .now)
+        if links[key]?.version != snapshot.version {
+            links[key]?.version = snapshot.version
+            persist()
+        }
+        if history, historyFetched[key].map({ Date.now.timeIntervalSince($0) > 60 }) ?? true {
+            await refreshHistory(key, client: client)
+        }
     }
 
     func history(_ project: UUID, _ server: Int64, since: Date) async -> AgentHistory? {
