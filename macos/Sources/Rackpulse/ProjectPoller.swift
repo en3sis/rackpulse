@@ -74,6 +74,11 @@ final class ProjectPoller {
         data.alerts.snooze(id, until: .now.addingTimeInterval(24 * 3600))
     }
 
+    func restore(_ state: AlertState) {
+        guard !data.alerts.hasPolled, !isLoading else { return }
+        data.alerts = state
+    }
+
     func pricing() async -> Pricing? {
         try? await client.pricing()
     }

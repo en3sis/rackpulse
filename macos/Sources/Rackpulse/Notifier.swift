@@ -5,6 +5,7 @@ import UserNotifications
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private static let category = "alert"
+    private static let summaryCategory = "summary"
     private static let snoozeAction = "snooze"
     private static let openAction = "open"
 
@@ -18,7 +19,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let snooze = UNNotificationAction(identifier: Self.snoozeAction, title: "Snooze 24 h")
         let open = UNNotificationAction(identifier: Self.openAction, title: "Open", options: [.foreground])
         center.setNotificationCategories([
-            UNNotificationCategory(identifier: Self.category, actions: [snooze, open], intentIdentifiers: [])
+            UNNotificationCategory(identifier: Self.category, actions: [snooze, open], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Self.summaryCategory, actions: [open], intentIdentifiers: []),
         ])
     }
 
@@ -50,21 +52,30 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         case .budget, .unexpectedChange, .rebootRequired: .info
         default: .warning
         }
-        let alert = FiringAlert(id: "preview:\(kind.rawValue):\(UUID().uuidString)", kind: kind, severity: severity,
-                                title: titles[kind] ?? kind.title, since: .now)
-        post(alert, project: project)
+        let id = "preview:\(kind.rawValue):\(UUID().uuidString)"
+        post(OutgoingNotification(
+            id: AlertCenter.notificationID(project: project.id, alert: id), project: project.id.uuidString, kind: kind, snoozeID: id,
+            heading: "web-1", title: titles[kind] ?? kind.title, subtitle: project.name,
+            body: "Started \(Date.now.formatted(date: .omitted, time: .shortened)). Rule: \(kind.title).",
+            severity: severity, created: .now
+        ))
     }
 
-    func post(_ alert: FiringAlert, project: Project, environment: ServerEnvironment = .none) {
+    func post(_ notification: OutgoingNotification) {
         let content = UNMutableNotificationContent()
-        content.title = alert.title
-        content.subtitle = environment.badge.map { "\(project.name) · \($0)" } ?? project.name
-        content.body = "Started \(alert.since.formatted(date: .omitted, time: .shortened)). Rule: \(alert.kind.title)."
-        content.sound = alert.severity == .critical ? .defaultCritical : .default
-        content.categoryIdentifier = Self.category
-        content.userInfo = ["project": project.id.uuidString, "alert": alert.id]
-        let request = UNNotificationRequest(identifier: "\(project.id.uuidString)|\(alert.id)", content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        content.title = notification.title
+        content.subtitle = notification.subtitle
+        content.body = notification.body
+        content.sound = notification.severity == .critical ? .defaultCritical : .default
+        content.categoryIdentifier = notification.snoozeID == nil ? Self.summaryCategory : Self.category
+        content.threadIdentifier = notification.thread
+        content.userInfo = ["project": notification.project, "alert": notification.snoozeID ?? ""]
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: notification.id, content: content, trigger: nil))
+    }
+
+    func remove(_ ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: Array(ids))
     }
 
     nonisolated func userNotificationCenter(
@@ -80,9 +91,10 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     ) async {
         let info = response.notification.request.content.userInfo
         let action = response.actionIdentifier
-        guard let project = (info["project"] as? String).flatMap(UUID.init), let alert = info["alert"] as? String else { return }
+        let project = (info["project"] as? String).flatMap(UUID.init)
+        let alert = (info["alert"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         await MainActor.run {
-            if action == Self.snoozeAction {
+            if action == Self.snoozeAction, let project, let alert {
                 onSnooze?(project, alert)
             } else {
                 onOpen?()

@@ -11,6 +11,7 @@ final class Monitor {
     let notifier = Notifier()
     let uptime = UptimeStore()
     let agents = AgentStore()
+    let alertCenter: AlertCenter
 
     private(set) var pollers: [UUID: ProjectPoller] = [:]
     private(set) var pricing: Pricing?
@@ -25,6 +26,9 @@ final class Monitor {
     init(store: ProjectStore, settings: SettingsStore) {
         self.store = store
         self.settings = settings
+        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Rackpulse", isDirectory: true)
+        alertCenter = AlertCenter(database: LocalDatabase.open(at: folder.appendingPathComponent("rackpulse.sqlite")))
         let center = NSWorkspace.shared.notificationCenter
         observers.append(center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.sleeping() }
@@ -35,7 +39,10 @@ final class Monitor {
                 self?.restart()
             }
         })
-        notifier.onSnooze = { [weak self] project, alert in self?.pollers[project]?.snooze(alert) }
+        notifier.onSnooze = { [weak self] project, alert in
+            self?.pollers[project]?.snooze(alert)
+            self?.alertCenter.snoozed(project: project, alert: alert)
+        }
         notifier.setUp()
         projectChanged()
     }
@@ -64,6 +71,7 @@ final class Monitor {
 
     func snooze(_ item: ProjectAlert) {
         pollers[item.project.id]?.snooze(item.alert.id)
+        alertCenter.snoozed(project: item.project.id, alert: item.alert.id)
     }
 
     func refreshNow() {
@@ -144,9 +152,11 @@ final class Monitor {
     func projectChanged() {
         let ids = Set(store.projects.map(\.id))
         pollers = pollers.filter { ids.contains($0.key) }
+        alertCenter.forget(projects: ids)
         for project in store.projects where pollers[project.id]?.access != project.access || reloads.contains(project.id) {
             if let token = store.token(for: project) {
                 pollers[project.id] = ProjectPoller(projectID: project.id, token: token, access: project.access)
+                alertCenter.reloaded(project.id)
             }
         }
         reloads = []
@@ -213,20 +223,33 @@ final class Monitor {
         var tasks: [Task<Void, Never>] = []
         for project in store.projects {
             guard let poller = pollers[project.id] else { continue }
-            tasks.append(Task { @MainActor in await self.poll(project, poller, now: now) })
+            tasks.append(Task { @MainActor in await self.poll(project, poller, now: now, deliver: false) })
         }
         for task in tasks { await task.value }
+        await deliverAlerts()
     }
 
-    private func poll(_ project: Project, _ poller: ProjectPoller, now: Date = .now) async {
+    private func deliverAlerts() async {
+        let delivery = await alertCenter.flush(settings.value.alerts)
+        notifier.remove(delivery.remove)
+        for notification in delivery.post { notifier.post(notification) }
+    }
+
+    private func poll(_ project: Project, _ poller: ProjectPoller, now: Date = .now, deliver: Bool = true) async {
+        if let state = await alertCenter.restore(project.id) { poller.restore(state) }
+        let serversKnown = !poller.data.servers.isEmpty
         let reports = await agents.poll(project.id, servers: poller.data.servers)
         let context = PollContext(
             now: now, pricing: settings.value.showsCosts ? pricing : nil, priceKind: settings.value.priceKind,
             serverPrices: settings.value.serverPrices(for: project.id),
             alertSettings: settings.value.alertSettings(for: project), agents: reports
         )
-        for event in await poller.refresh(context) {
-            if case .fired(let alert, true) = event { notifier.post(alert, project: project, environment: environment(of: alert, project, poller)) }
+        let events = await poller.refresh(context)
+        if !serversKnown, !poller.data.servers.isEmpty {
+            _ = await agents.poll(project.id, servers: poller.data.servers)
+        }
+        await alertCenter.collect(project: project, poller: poller, events: events, context: context) { serverID in
+            subtitle(project, poller, serverID)
         }
         if poller.problem == nil {
             uptime.record(poller.data, at: .now)
@@ -235,12 +258,12 @@ final class Monitor {
             settings.adoptLegacyEnvironment(project.environment, project: project.id, servers: poller.data.servers)
             store.update(project.id) { $0.environment = .none }
         }
+        if deliver { await deliverAlerts() }
     }
 
-    private func environment(of alert: FiringAlert, _ project: Project, _ poller: ProjectPoller) -> ServerEnvironment {
-        let id = ProjectAlert(project: project, alert: alert).serverID
-        guard let server = poller.data.servers.first(where: { $0.id == id }) else { return .none }
-        return settings.environment(project: project.id, server: server)
+    private func subtitle(_ project: Project, _ poller: ProjectPoller, _ serverID: Int64?) -> String {
+        guard let serverID, let server = poller.data.servers.first(where: { $0.id == serverID }) else { return project.name }
+        return settings.environment(project: project.id, server: server).badge.map { "\(project.name) · \($0)" } ?? project.name
     }
 }
 

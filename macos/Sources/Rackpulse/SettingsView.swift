@@ -318,11 +318,32 @@ private struct AlertsPage: View {
                     DatePicker("To", selection: minuteBinding(\.endMinute), displayedComponents: .hourAndMinute)
                 }
             } footer: {
-                Text("During quiet hours alerts still show in the popover and the menu bar, but no notifications are sent.")
+                Text("During quiet hours alerts still show in the popover and the menu bar. Notifications wait and arrive as one summary when quiet hours end.")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                DatePicker("Send at", selection: summaryBinding, displayedComponents: .hourAndMinute)
+            } header: {
+                Text("Daily summary")
+            } footer: {
+                Text("Rules set to Daily summary send one notification a day with everything new since the last one.")
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var summaryBinding: Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.startOfDay(for: .now).addingTimeInterval(TimeInterval(settings.value.alerts.dailySummaryMinute * 60))
+            },
+            set: { date in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+                settings.value.alerts.dailySummaryMinute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+            }
+        )
     }
 
     private func ruleBinding(_ kind: RuleKind) -> Binding<RuleConfig> {
@@ -368,6 +389,7 @@ struct RuleEditor: View {
             controls
             Picker("Deliver as", selection: $rule.delivery) {
                 Text("Notification").tag(Delivery.push)
+                Text("Daily summary").tag(Delivery.digest)
                 Text("Popover only").tag(Delivery.banner)
             }
         }

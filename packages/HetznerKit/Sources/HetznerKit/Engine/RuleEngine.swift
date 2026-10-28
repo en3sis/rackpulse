@@ -94,9 +94,7 @@ public struct RuleEngine: Sendable {
     }
 
     private func shouldNotify(_ alert: FiringAlert, rule: RuleConfig, state: AlertState, now: Date) -> Bool {
-        guard rule.delivery == .push, !state.isSnoozed(alert.id, at: now) else { return false }
-        if let quiet = settings.quietHours, quiet.contains(now, calendar: calendar) { return false }
-        return true
+        rule.delivery != .banner && !state.isSnoozed(alert.id, at: now)
     }
 
     private func evaluatedKinds(_ snapshot: PollSnapshot) -> Set<RuleKind> {
