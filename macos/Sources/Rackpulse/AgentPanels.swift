@@ -25,9 +25,9 @@ struct AgentNotice: View {
     var title: String?
     let text: String
     var action: (title: String, run: () -> Void)?
-    var copy: String?
+    var commands: [String] = []
 
-    @State private var copied = false
+    @State private var copied: String?
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -40,9 +40,7 @@ struct AgentNotice: View {
                     .font(.system(size: 12))
                     .foregroundStyle(title == nil ? Color.primary : Theme.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if let copy {
-                    command(copy)
-                }
+                ForEach(commands, id: \.self, content: command)
             }
             Spacer(minLength: 0)
             if let action {
@@ -65,18 +63,18 @@ struct AgentNotice: View {
                 .truncationMode(.middle)
                 .textSelection(.enabled)
             Spacer(minLength: 0)
-            Button(copied ? "Copied" : "Copy") {
+            Button(copied == value ? "Copied" : "Copy") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(value, forType: .string)
-                copied = true
+                copied = value
                 Task {
                     try? await Task.sleep(for: .seconds(1.5))
-                    copied = false
+                    if copied == value { copied = nil }
                 }
             }
             .buttonStyle(.plain)
             .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(copied ? Theme.green : Color.accentColor)
+            .foregroundStyle(copied == value ? Theme.green : Color.accentColor)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
@@ -105,7 +103,7 @@ struct AgentOverview: View {
                     kind: .info,
                     title: "Agent update available",
                     text: "Version \(AgentStore.latestVersion). Run this on the server as root. It keeps the key and settings.",
-                    copy: AgentStore.updateCommand
+                    commands: [AgentStore.updateCommand]
                 )
             }
             if let snapshot = state?.snapshot {
@@ -175,7 +173,12 @@ struct AgentOverview: View {
             result.append(AgentNotice(kind: .warning, text: "\(disk.mount) is \(Format.percent(disk.usedFraction * 100)) full."))
         }
         for unit in snapshot.system.failedUnits {
-            result.append(AgentNotice(kind: .problem, text: "\(unit) failed. Check it with systemctl status \(unit)."))
+            result.append(AgentNotice(
+                kind: .problem,
+                title: "\(unit) failed",
+                text: "Run these on the server: the first shows why it failed, the second clears the failure once it is fixed.",
+                commands: ["sudo systemctl status \(unit)", "sudo systemctl reset-failed \(unit)"]
+            ))
         }
         let troubled = (snapshot.docker?.containers ?? []).filter { $0.isUnhealthy || $0.isRestartLoop || $0.crashed(within: 3_600, now: .now) }
         if !troubled.isEmpty {
@@ -183,7 +186,12 @@ struct AgentOverview: View {
             result.append(AgentNotice(kind: .warning, text: "Docker: \(names) need\(troubled.count == 1 ? "s" : "") attention.", action: ("Show", openDocker)))
         }
         if snapshot.system.rebootRequired {
-            result.append(AgentNotice(kind: .info, text: "Updates were installed that need a reboot."))
+            result.append(AgentNotice(
+                kind: .info,
+                title: "Reboot needed",
+                text: "Updates were installed that need a reboot.",
+                commands: ["sudo reboot"]
+            ))
         }
         return result
     }
