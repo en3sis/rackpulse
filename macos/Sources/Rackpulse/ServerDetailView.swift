@@ -250,6 +250,7 @@ struct ServerDetailView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.secondary)
                     .lineLimit(1)
+                    .help(spec)
             }
             Spacer(minLength: 0)
             if project.access == .readWrite {
@@ -736,19 +737,24 @@ struct ServerDetailView: View {
                 .font(.system(size: 11, weight: accent == nil ? .regular : .semibold))
                 .foregroundStyle(accent ?? Theme.secondary)
                 .labelStyle(FactLabelStyle())
-            Text(value).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.text).lineLimit(1)
+            Text(value)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
         .tip(help)
+        .help(help == nil ? value : "")
     }
 
     private var spec: String {
         if server.agentOnly {
-            let os = snapshot?.host.os ?? server.serverType.description.components(separatedBy: " · ").first ?? ""
-            let parts = [os, server.meta(address: nil), project.name].filter { !$0.isEmpty && $0 != "Waiting for the agent" }
+            let parts = [server.meta(address: nil), project.name].filter { !$0.isEmpty && $0 != "Waiting for the agent" }
             return parts.joined(separator: " · ")
         }
         let type = server.serverType
