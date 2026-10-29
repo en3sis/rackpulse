@@ -23,9 +23,10 @@ const (
 )
 
 type Config struct {
-	Token  string `json:"token"`
-	Port   int    `json:"port"`
-	Listen string `json:"listen"`
+	Token         string `json:"token"`
+	Port          int    `json:"port"`
+	Listen        string `json:"listen"`
+	TailscaleName string `json:"tailscaleName,omitempty"`
 }
 
 func Load(path string) (Config, error) {

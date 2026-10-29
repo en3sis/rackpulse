@@ -28,7 +28,7 @@ struct AppSettings: Codable, Equatable {
     var readout: MenuBarReadout = .none
     var chartRange: MetricRange = .hour
     var shortcut: PanelShortcut = .controlOptionR
-    var compactList = true
+    var compactList = false
     var serverAlerts: [String: ServerAlertOverride] = [:]
     var serverEnvironments: [String: ServerEnvironment] = [:]
     var serverPrices: [String: Decimal] = [:]
@@ -54,7 +54,7 @@ struct AppSettings: Codable, Equatable {
         readout = (try? container.decode(MenuBarReadout.self, forKey: .readout)) ?? .none
         chartRange = (try? container.decode(MetricRange.self, forKey: .chartRange)) ?? .hour
         shortcut = (try? container.decode(PanelShortcut.self, forKey: .shortcut)) ?? .controlOptionR
-        compactList = (try? container.decode(Bool.self, forKey: .compactList)) ?? true
+        compactList = (try? container.decode(Bool.self, forKey: .compactList)) ?? false
         serverAlerts = (try? container.decode([String: ServerAlertOverride].self, forKey: .serverAlerts)) ?? [:]
         serverEnvironments = (try? container.decode([String: ServerEnvironment].self, forKey: .serverEnvironments)) ?? [:]
         serverPrices = (try? container.decode([String: Decimal].self, forKey: .serverPrices)) ?? [:]
@@ -70,6 +70,12 @@ struct AppSettings: Codable, Equatable {
             settings.rules[index].enabled = false
         }
         for (id, override) in Self.servers(serverAlerts, project: project.id) { settings.servers[id] = override }
+        if !project.hasAPI {
+            let providerKinds: Set<RuleKind> = [.serverDown, .storageBox, .trafficQuota, .unexpectedChange]
+            for index in settings.rules.indices where providerKinds.contains(settings.rules[index].kind) {
+                settings.rules[index].enabled = false
+            }
+        }
         return settings
     }
 

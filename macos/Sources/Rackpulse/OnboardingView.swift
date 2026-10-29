@@ -1,9 +1,10 @@
 import HetznerKit
 import SwiftUI
 
-struct OnboardingView: View {
+struct CloudProjectForm: View {
     let store: ProjectStore
     let canCancel: Bool
+    var back: (() -> Void)?
     let done: (Bool) -> Void
 
     @State private var name = ""
@@ -17,8 +18,12 @@ struct OnboardingView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Add a Hetzner Cloud project")
-                    .font(.system(size: 15, weight: .semibold))
+                FormTitle(text: "Add a Hetzner Cloud project", back: back)
+                HStack(spacing: 6) {
+                    Text("Provider").foregroundStyle(Theme.secondary)
+                    Text("Hetzner Cloud").fontWeight(.medium)
+                }
+                .font(.system(size: 12))
                 Text("Rackpulse needs an API token for each project.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.secondary)

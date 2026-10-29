@@ -10,8 +10,7 @@ r2_check
 
 release=$(agent_version)
 out=dist/agent/$release
-files=(install.sh rackpulse-agent-linux-amd64 rackpulse-agent-linux-arm64 SHA256SUMS)
-for name in "${files[@]}"; do
+for name in "${agent_files[@]}"; do
   if [ ! -f "$out/$name" ]; then
     echo "$out/$name is missing. Run make agent first"
     exit 1
@@ -22,20 +21,12 @@ done
   exit 1
 }
 
-content_type() {
-  case "$1" in
-    install.sh) echo "text/x-shellscript; charset=utf-8" ;;
-    SHA256SUMS) echo "text/plain; charset=utf-8" ;;
-    *) echo application/octet-stream ;;
-  esac
-}
-
 echo "Uploading rackpulse-agent $release to $site/agent"
 r2_setup
 
-for name in "${files[@]}"; do
+for name in "${agent_files[@]}"; do
   put "$out/$name" "agent/$release/$name" "$(content_type "$name")" "public, max-age=31536000, immutable"
 done
-for name in "${files[@]}"; do
+for name in "${agent_files[@]}"; do
   put "$out/$name" "agent/$name" "$(content_type "$name")" "public, max-age=300"
 done

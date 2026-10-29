@@ -6,6 +6,7 @@ struct ServerList: View {
     let store: ProjectStore
     var query = ""
     var highlighted: DetailTarget?
+    var addServer: (UUID) -> Void = { _ in }
     let open: (UUID, Int64) -> Void
 
     var body: some View {
@@ -46,12 +47,18 @@ struct ServerList: View {
         if let poller, poller.data.lastUpdated != nil {
             let servers = query.isEmpty ? sorted(poller) : sorted(poller).filter { Self.matches(project, poller, query, settings: monitor.settings).contains($0) }
             if servers.isEmpty {
-                EmptyLine(text: "No servers in this project yet.", link: ("Open Hetzner Console", URL(string: "https://console.hetzner.com/projects")!))
+                if let url = project.provider.consoleURL(project) {
+                    EmptyLine(text: "No servers in this project yet.", link: ("Open \(project.provider.consoleName)", url))
+                } else {
+                    EmptyLine(text: "No servers in this project yet.", link: nil, action: ("Add a server", { addServer(project.id) }))
+                }
             }
             ForEach(Array(servers.enumerated()), id: \.element.id) { index, server in
                 let alert = poller.visibleAlerts.first { $0.id.hasSuffix(":\(server.id)") }
                 let divider = index < servers.count - 1
                 let environment = monitor.settings.environment(project: project.id, server: server)
+                let agent = monitor.agents.state(project.id, server.id)?.snapshot
+                let address = server.agentOnly ? monitor.agents.link(project.id, server.id)?.endpoint.host : nil
                 Button { open(project.id, server.id) } label: {
                     Group {
                         if monitor.settings.value.compactList {
@@ -61,11 +68,13 @@ struct ServerList: View {
                                 metrics: poller.data.metrics[server.id],
                                 alert: alert,
                                 threshold: monitor.settings.value.alertSettings(for: project).rule(.sustainedCPU, server: server.id)?.threshold,
-                                showsDivider: divider
+                                showsDivider: divider,
+                                agent: agent,
+                                address: address
                             )
                         } else {
                             ServerRow(server: server, environment: environment, metrics: poller.data.metrics[server.id], alert: alert, showsDivider: divider,
-                                      agent: monitor.agents.state(project.id, server.id)?.snapshot)
+                                      agent: agent, address: address)
                         }
                     }
                     .contentShape(Rectangle())
@@ -114,53 +123,47 @@ struct FleetHeadline: View {
             let worst = items.map(\.alert.severity).max()
             let healthy = down == 0 && alerts == 0
             let color = healthy ? (notices > 0 ? Theme.info : Theme.green) : worst.map(Theme.color) ?? Theme.orange
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: healthy ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(healthy ? Theme.green : color)
-                        .symbolEffect(.bounce, value: healthy)
-                    Text(headline(servers: servers.count, down: down, alerts: alerts))
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    HStack(spacing: 10) {
-                        if let cpu = averageCPU(loaded) {
-                            figure("cpu", Format.percent(cpu), help: "Average CPU across these servers right now")
-                        }
-                        if let cost = cost {
-                            figure("banknote", cost, help: "Estimated cost this month")
-                        }
+            if !healthy || !items.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: healthy ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(healthy ? Theme.green : color)
+                            .symbolEffect(.bounce, value: healthy)
+                        Text(headline(servers: servers.count, down: down, alerts: alerts))
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
                     }
-                }
-                if !items.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(expanded ? items : Array(items.prefix(Self.collapsedCount))) { item in
-                            row(item)
-                        }
-                        if items.count > Self.collapsedCount {
-                            Button(expanded ? "Show less" : "Show \(items.count - Self.collapsedCount) more") {
-                                var transaction = Transaction(animation: nil)
-                                transaction.disablesAnimations = true
-                                withTransaction(transaction) { expanded.toggle() }
+                    if !items.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(expanded ? items : Array(items.prefix(Self.collapsedCount))) { item in
+                                row(item)
                             }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Color.accentColor)
-                            .padding(.leading, 23)
+                            if items.count > Self.collapsedCount {
+                                Button(expanded ? "Show less" : "Show \(items.count - Self.collapsedCount) more") {
+                                    var transaction = Transaction(animation: nil)
+                                    transaction.disablesAnimations = true
+                                    withTransaction(transaction) { expanded.toggle() }
+                                }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color.accentColor)
+                                .padding(.leading, 23)
+                            }
                         }
+                        .transaction { $0.animation = nil }
                     }
-                    .transaction { $0.animation = nil }
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(color.opacity(healthy ? 0.08 : 0.1), in: RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    if !healthy { RoundedRectangle(cornerRadius: 10).stroke(color.opacity(0.3)) }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(color.opacity(healthy ? 0.08 : 0.1), in: RoundedRectangle(cornerRadius: 10))
-            .overlay {
-                if !healthy { RoundedRectangle(cornerRadius: 10).stroke(color.opacity(0.3)) }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
         }
     }
 
@@ -208,32 +211,6 @@ struct FleetHeadline: View {
         }
         return parts.joined(separator: " · ")
     }
-
-    private func figure(_ icon: String, _ value: String, help: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary)
-            Text(value).font(.system(size: 12, weight: .semibold)).rolling(value)
-        }
-        .help(help)
-    }
-
-    private func averageCPU(_ pollers: [ProjectPoller]) -> Double? {
-        let values = pollers.flatMap { poller in
-            poller.data.servers.compactMap { poller.data.metrics[$0.id]?.cpuPercent(cores: $0.serverType.cores).last?.value }
-        }
-        return values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
-    }
-
-    private var cost: String? {
-        let currency = monitor.pricing?.currency ?? "EUR"
-        let amount: Decimal?
-        if store.scope.count > 1 {
-            amount = monitor.allProjectsCost?.monthToDate
-        } else {
-            amount = store.scope.first.flatMap { monitor.costReport(for: $0.id)?.monthToDate }
-        }
-        return amount.map { $0.formatted(.currency(code: currency).precision(.fractionLength(0))) }
-    }
 }
 
 struct ProjectHeader: View {
@@ -256,6 +233,7 @@ struct ProjectHeader: View {
             Text(project.name)
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
+            ProviderTag(provider: project.provider)
             Spacer(minLength: 8)
             Text(summary)
                 .font(.system(size: 11))
@@ -290,6 +268,7 @@ struct ProjectHeader: View {
 struct EmptyLine: View {
     let text: String
     let link: (String, URL)?
+    var action: (String, () -> Void)?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -297,6 +276,9 @@ struct EmptyLine: View {
                 .foregroundStyle(Theme.secondary)
             if let link {
                 Link(link.0, destination: link.1)
+            }
+            if let action {
+                Button(action.0, action: action.1).buttonStyle(.link)
             }
             Spacer(minLength: 0)
         }
@@ -352,6 +334,8 @@ struct ServerRow: View {
     let showsDivider: Bool
     var agent: AgentSnapshot?
 
+    var address: String?
+
     private var cpu: [MetricPoint] { metrics?.cpuPercent(cores: server.serverType.cores) ?? [] }
     private var running: Bool { server.status == .running }
 
@@ -363,6 +347,7 @@ struct ServerRow: View {
                 Text(server.name).font(.system(size: 14, weight: .semibold)).lineLimit(1)
                 EnvironmentBadge(environment: environment)
                 Text(meta).font(.system(size: 12)).foregroundStyle(Theme.secondary).lineLimit(1)
+                if server.agentOnly { AgentHostIcons(server: server, address: address) }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
@@ -370,6 +355,9 @@ struct ServerRow: View {
             }
 
             HStack(alignment: .top, spacing: 12) {
+                if server.agentOnly && cpu.isEmpty && agent != nil {
+                    metric("Load · 1 min", Format.load(agent?.host.load.first), help: "Update the agent to see CPU use.")
+                } else {
                 VStack(alignment: .leading, spacing: 3) {
                     caption("CPU · 1 h")
                     HStack(alignment: .bottom, spacing: 6) {
@@ -382,11 +370,15 @@ struct ServerRow: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 if let agent, running {
                     let fullest = agent.disks.max { $0.usedFraction < $1.usedFraction }
                     metric("Memory", Format.percent(agent.memory.usedFraction * 100), warn: agent.memory.usedFraction >= 0.9)
-                    metric(fullest.map { "Disk \($0.mount)" } ?? "Disk", Format.percent(fullest.map { $0.usedFraction * 100 }),
-                           warn: (fullest?.usedFraction ?? 0) >= 0.9)
+                    metric("Disk", Format.percent(fullest.map { $0.usedFraction * 100 }),
+                           warn: (fullest?.usedFraction ?? 0) >= 0.9, help: fullest.map { "Fullest file system: \($0.mount)" })
+                } else if server.agentOnly {
+                    metric("Memory", "-")
+                    metric("Disk", "-")
                 } else {
                     metric("Disk I/O", running ? Format.iops(metrics?.totalIOPS.last?.value) : "-")
                     metric("Net out", running ? Format.rate(metrics?.points(MetricSeries.networkBandwidthOut).last?.value) : "-")
@@ -421,7 +413,7 @@ struct ServerRow: View {
     }
 
     private var meta: String {
-        let base = "\(server.serverType.name.uppercased()) · \(Format.place(server.location))"
+        let base = server.meta(address: address)
         return running ? base : "\(base) · \(statusLabel)"
     }
 
@@ -435,6 +427,7 @@ struct ServerRow: View {
 
     private var statusColor: Color {
         if let alert { return Theme.color(alert.severity) }
+        if server.agentOnly && agent == nil { return Theme.off }
         switch server.status {
         case .running: return Theme.green
         case .off: return Theme.off
@@ -456,13 +449,14 @@ struct ServerRow: View {
         Text(text).font(.system(size: 11)).foregroundStyle(Theme.secondary)
     }
 
-    private func metric(_ title: String, _ value: String, warn: Bool = false) -> some View {
+    private func metric(_ title: String, _ value: String, warn: Bool = false, help: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            caption(title)
+            caption(title).lineLimit(1)
             Text(value).font(.system(size: 15, weight: .semibold)).rolling(value)
                 .foregroundStyle(warn ? Theme.orange : Theme.text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .help(help ?? "")
     }
 }
 
@@ -537,9 +531,16 @@ struct CompactServerRow: View {
     let alert: FiringAlert?
     let threshold: Double?
     let showsDivider: Bool
+    var agent: AgentSnapshot?
+    var address: String?
 
     private var running: Bool { server.status == .running }
-    private var cpu: Double? { metrics?.cpuPercent(cores: server.serverType.cores).last?.value }
+    private var load: Double? { agent?.host.load.first }
+    private var usesLoad: Bool { server.agentOnly && (metrics?.points(MetricSeries.cpu).isEmpty ?? true) && agent != nil }
+    private var cpu: Double? {
+        if usesLoad { return load.map { $0 / Double(max(1, agent?.host.cores ?? 1)) * 100 } }
+        return metrics?.cpuPercent(cores: server.serverType.cores).last?.value
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -548,7 +549,7 @@ struct CompactServerRow: View {
                 Text(server.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                 EnvironmentBadge(environment: environment)
                 Spacer(minLength: 8)
-                Text(running ? Format.percent(cpu) : statusLabel)
+                Text(usesLoad ? "Load \(Format.load(load))" : running ? Format.percent(cpu) : statusLabel)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(running ? barColor : Theme.off)
                     .rolling(cpu)
@@ -564,10 +565,15 @@ struct CompactServerRow: View {
             }
             .frame(height: 4)
             HStack(spacing: 4) {
-                Text("\(server.serverType.name.uppercased()) · \(Format.place(server.location))")
+                Text(server.meta(address: address))
                     .lineLimit(1)
+                if server.agentOnly { AgentHostIcons(server: server, address: address) }
                 Spacer(minLength: 8)
-                if running {
+                if usesLoad {
+                    if let fullest = agent?.disks.max(by: { $0.usedFraction < $1.usedFraction }) {
+                        Text("Disk \(Format.percent(fullest.usedFraction * 100))")
+                    }
+                } else if running {
                     Text("↑ \(Format.rate(metrics?.points(MetricSeries.networkBandwidthOut).last?.value))")
                         .rolling(metrics?.points(MetricSeries.networkBandwidthOut).last?.value)
                 }
@@ -593,6 +599,7 @@ struct CompactServerRow: View {
 
     private var statusColor: Color {
         if let alert { return Theme.color(alert.severity) }
+        if server.agentOnly && agent == nil { return Theme.off }
         switch server.status {
         case .running: return Theme.green
         case .off: return Theme.off
@@ -606,5 +613,53 @@ struct CompactServerRow: View {
         if cpu > limit { return Theme.red }
         if cpu > limit * 0.75 { return Theme.orange }
         return Theme.green
+    }
+}
+
+extension Server {
+    func meta(address: String?) -> String {
+        guard agentOnly else { return "\(serverType.name.uppercased()) · \(Format.place(location))" }
+        var parts: [String] = []
+        if serverType.cores > 0 { parts.append("\(Int(serverType.cores)) \(serverType.cores == 1 ? "core" : "cores")") }
+        if serverType.memory > 0 { parts.append(Format.memory(Int64(serverType.memory * 1_073_741_824))) }
+        return parts.isEmpty ? "Waiting for the agent" : parts.joined(separator: " · ")
+    }
+}
+
+struct AgentHostIcons: View {
+    let server: Server
+    let address: String?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if !server.serverType.description.isEmpty {
+                icon("desktopcomputer", server.serverType.description)
+            }
+            if let address, !address.isEmpty {
+                icon("network", address)
+            }
+        }
+    }
+
+    private func icon(_ name: String, _ help: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 10))
+            .foregroundStyle(Theme.secondary)
+            .help(help)
+            .accessibilityLabel(help)
+    }
+}
+
+struct ProviderTag: View {
+    let provider: CloudProvider
+
+    var body: some View {
+        Text(provider.name)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(Theme.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 4))
+            .fixedSize()
     }
 }

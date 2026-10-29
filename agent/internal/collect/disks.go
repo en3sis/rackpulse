@@ -18,6 +18,8 @@ type Disk struct {
 	InodesTotal int64  `json:"inodesTotal"`
 	InodesUsed  int64  `json:"inodesUsed"`
 	ReadOnly    bool   `json:"readOnly"`
+	Kind        string `json:"kind,omitempty"`
+	Model       string `json:"model,omitempty"`
 }
 
 type mountEntry struct {
@@ -107,9 +109,17 @@ func readDisks() []Disk {
 			continue
 		}
 		size := int64(stat.Bsize)
+		var info syscall.Stat_t
+		var dev uint64
+		if syscall.Stat(entry.Mount, &info) == nil {
+			dev = uint64(info.Dev)
+		}
+		media := describeStorage("/sys", entry.Device, dev)
 		disks = append(disks, Disk{
 			Mount:       entry.Mount,
-			Device:      entry.Device,
+			Device:      media.Device,
+			Kind:        media.Kind,
+			Model:       media.Model,
 			FS:          entry.FS,
 			Total:       int64(stat.Blocks) * size,
 			Used:        int64(stat.Blocks-stat.Bfree) * size,

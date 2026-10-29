@@ -12,6 +12,7 @@ final class AppActions {
     var screenHeight: CGFloat = 800
     var chartRange: MetricRange?
     var opened = 0
+    var visible = false
     var shortcutChanged: () -> Void = {}
 }
 
@@ -23,6 +24,7 @@ enum PanelRoute: Equatable {
     case serverTab(UUID, Int64, ServerTab)
     case container(UUID, Int64, String)
     case addProject
+    case addServer(UUID)
 }
 
 @MainActor
@@ -63,7 +65,7 @@ final class StatusBarController: NSObject {
             button.target = self
             button.action = #selector(toggle)
             button.sendAction(on: [.leftMouseDown, .rightMouseDown])
-            button.toolTip = "Rackpulse"
+            button.toolTip = Flavor.name
         }
         actions.openPanel = { [weak self] in self?.show() }
         panel.onCancel = { [weak self] in self?.close() }
@@ -114,6 +116,7 @@ final class StatusBarController: NSObject {
         panel.setFrame(frame, display: true)
         layoutContent()
         actions.opened += 1
+        actions.visible = true
         panel.makeKeyAndOrderFront(nil)
         item.button?.highlight(true)
         DispatchQueue.main.async { [weak self] in self?.keepHighlight() }
@@ -139,6 +142,7 @@ final class StatusBarController: NSObject {
     func close() {
         if panel.isVisible { closedAt = .now }
         panel.orderOut(nil)
+        actions.visible = false
         item.button?.highlight(false)
         if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         clickMonitor = nil

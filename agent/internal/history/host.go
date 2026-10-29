@@ -21,11 +21,18 @@ const (
 )
 
 type Sample struct {
-	T      int64   `json:"t"`
-	Memory float64 `json:"memory"`
-	Swap   float64 `json:"swap"`
-	Disk   float64 `json:"disk"`
-	Load   float64 `json:"load"`
+	T              int64    `json:"t"`
+	Memory         float64  `json:"memory"`
+	Swap           float64  `json:"swap"`
+	Disk           float64  `json:"disk"`
+	Load           float64  `json:"load"`
+	CPU            *float64 `json:"cpu,omitempty"`
+	DiskReadIOPS   *float64 `json:"diskReadIOPS,omitempty"`
+	DiskWriteIOPS  *float64 `json:"diskWriteIOPS,omitempty"`
+	DiskReadBytes  *float64 `json:"diskReadBytes,omitempty"`
+	DiskWriteBytes *float64 `json:"diskWriteBytes,omitempty"`
+	NetInBytes     *float64 `json:"netInBytes,omitempty"`
+	NetOutBytes    *float64 `json:"netOutBytes,omitempty"`
 }
 
 type Host struct {
@@ -174,12 +181,33 @@ func averageSamples(bucket int64, group []Sample) Sample {
 		sum.Load += sample.Load
 	}
 	count := float64(len(group))
+	field := func(get func(Sample) *float64) *float64 {
+		total, n := 0.0, 0
+		for _, sample := range group {
+			if value := get(sample); value != nil {
+				total += *value
+				n++
+			}
+		}
+		if n == 0 {
+			return nil
+		}
+		value := roundTo(total/float64(n), 2)
+		return &value
+	}
 	return Sample{
-		T:      bucket,
-		Memory: roundTo(sum.Memory/count, 4),
-		Swap:   roundTo(sum.Swap/count, 4),
-		Disk:   roundTo(sum.Disk/count, 4),
-		Load:   roundTo(sum.Load/count, 2),
+		T:              bucket,
+		Memory:         roundTo(sum.Memory/count, 4),
+		Swap:           roundTo(sum.Swap/count, 4),
+		Disk:           roundTo(sum.Disk/count, 4),
+		Load:           roundTo(sum.Load/count, 2),
+		CPU:            field(func(s Sample) *float64 { return s.CPU }),
+		DiskReadIOPS:   field(func(s Sample) *float64 { return s.DiskReadIOPS }),
+		DiskWriteIOPS:  field(func(s Sample) *float64 { return s.DiskWriteIOPS }),
+		DiskReadBytes:  field(func(s Sample) *float64 { return s.DiskReadBytes }),
+		DiskWriteBytes: field(func(s Sample) *float64 { return s.DiskWriteBytes }),
+		NetInBytes:     field(func(s Sample) *float64 { return s.NetInBytes }),
+		NetOutBytes:    field(func(s Sample) *float64 { return s.NetOutBytes }),
 	}
 }
 
@@ -221,6 +249,16 @@ func SampleFrom(snapshot collect.Snapshot) Sample {
 		if memory.SwapTotal > 0 {
 			sample.Swap = roundTo(float64(memory.SwapTotal-memory.SwapFree)/float64(memory.SwapTotal), 4)
 		}
+	}
+	if activity := snapshot.Activity; activity != nil {
+		value := func(v float64) *float64 { return &v }
+		sample.CPU = value(activity.CPU)
+		sample.DiskReadIOPS = value(activity.DiskReadIOPS)
+		sample.DiskWriteIOPS = value(activity.DiskWriteIOPS)
+		sample.DiskReadBytes = value(activity.DiskReadBytes)
+		sample.DiskWriteBytes = value(activity.DiskWriteBytes)
+		sample.NetInBytes = value(activity.NetInBytes)
+		sample.NetOutBytes = value(activity.NetOutBytes)
 	}
 	for _, disk := range snapshot.Disks {
 		if capacity := disk.Used + disk.Available; capacity > 0 {

@@ -23,7 +23,7 @@ curl -fsSL https://rackpulse.app/agent/install.sh | sudo sh -s -- --pair rb1_...
 |---|---|---|
 | `--pair <key>` | | The pairing key. Required on the first install. Pass it again to pair with another Mac; the old key stops working |
 | `--port <port>` | `7311` | TCP port |
-| `--listen <ip>` | all addresses | Listen only on this address, for example a Tailscale or private network IP |
+| `--listen <ip>` | all addresses | Listen only on this address, for example a private network IP. `--listen tailscale` uses the server's Tailscale IPv4 address |
 
 Running the script again without `--pair` updates the agent and keeps its key and settings.
 
@@ -31,11 +31,12 @@ The script downloads the binary for the server's architecture from `rackpulse.ap
 
 1. Copies itself to `/usr/local/bin/rackpulse-agent`.
 2. Creates the system user `rackpulse` and adds it to the `docker` group if Docker is installed.
-3. Writes `/etc/rackpulse-agent/config.json` (mode 0640, `root:rackpulse`) with the key, port, and address.
+3. Writes `/etc/rackpulse-agent/config.json` (mode 0640, `root:rackpulse`) with the key, port, address, and the server's MagicDNS name if Tailscale runs on it (`tailscale status --json`).
 4. Creates a self-signed TLS certificate in `/var/lib/rackpulse-agent`.
 5. Reads past boots from the system journal, so the uptime history starts with the last 30 days.
 6. Installs and starts `rackpulse-agent.service`.
-7. Prints the firewall rule to add.
+7. If ufw is active, allows the port: on `tailscale0` for a Tailscale address, to the listen address for another address, or on all addresses. `rackpulse-agent uninstall` removes the rule again.
+8. Prints the firewall rule to add outside the server.
 
 ## Firewall
 
@@ -43,8 +44,9 @@ Rackpulse must reach the port from your Mac.
 
 | Address Rackpulse uses | What to open |
 |---|---|
-| Public IPv4 or IPv6 | Hetzner Cloud Firewall attached to the server: inbound rule, TCP, port 7311. If you have a fixed IP, set it as the source. If ufw is active on the server: `sudo ufw allow 7311/tcp` |
-| Tailscale or other VPN address | No public rule. If ufw is active: `sudo ufw allow in on tailscale0 to any port 7311 proto tcp` |
+| Public IPv4 or IPv6 | Hetzner Cloud Firewall attached to the server: inbound rule, TCP, port 7311. If you have a fixed IP, set it as the source. The installer adds the ufw rule |
+| Tailscale (`--listen tailscale`) | No public rule. The installer allows the port on `tailscale0` in ufw |
+| Other VPN address | No public rule. The installer allows the port to that address in ufw |
 | Hetzner private network | No public rule. Your Mac must reach the private network, for example through a VPN server in it |
 
 A server without a Cloud Firewall and without ufw accepts the connection on all addresses.
@@ -145,7 +147,8 @@ Header `Authorization: Bearer <key>`. The current state, collected every 60 seco
 ```
 
 - `serverID` is the Hetzner server ID from the metadata service, or `null`.
-- `disks` lists block-device file systems, one entry per device. `readOnly` is the file system's own state, so it is `true` only when the file system is mounted read-only on the server. `inodesTotal` and `inodesUsed` are 0 on file systems without fixed inodes, such as btrfs.
+- `tailscale` is left out when Tailscale does not run on the server. Otherwise `name` is the MagicDNS name saved at install and `ip` the current address of `tailscale0`. Rackpulse uses them to keep reaching the server over Tailscale.
+- `disks` lists block-device file systems, one entry per device. `readOnly` is the file system's own state, so it is `true` only when the file system is mounted read-only on the server. `inodesTotal` and `inodesUsed` are 0 on file systems without fixed inodes, such as btrfs. `kind` is the device type: `sd`, `emmc`, `nvme`, `usb`, `ssd`, `hdd`, `virtual`, `ram`, `image`, `raid` or `mapped`. `model` is the device's model name when the kernel reports one. Older agents leave both out.
 - `docker` is `null` when Docker is not installed. `error` is set when the socket exists but cannot be read.
 - `project` is the Docker Compose project label, or `null`.
 - `state` is Docker's state: `running`, `restarting`, `paused`, `exited`, `created`, `dead`.
@@ -168,14 +171,15 @@ Header `Authorization: Bearer <key>`.
   "coverageStart": 1758900000,
   "hours": { "1761476400": 60, "1761480000": 12 },
   "step": 300,
-  "samples": [ { "t": 1761479700, "memory": 0.62, "swap": 0, "disk": 0.51, "load": 0.2 } ]
+  "samples": [ { "t": 1761479700, "memory": 0.62, "swap": 0, "disk": 0.51, "load": 0.2, "cpu": 4.5,
+                 "diskReadIOPS": 0.2, "diskWriteIOPS": 3.1, "diskReadBytes": 820, "diskWriteBytes": 41000, "netInBytes": 1900, "netOutBytes": 1300 } ]
 }
 ```
 
 - `time`: the agent's current time. Use it to judge the current hour, which is not over yet.
 - `coverageStart`: from this time on, the agent knows when the server was running. Before it, nothing is known.
 - `hours`: for each hour that starts at or after `since`, the number of minutes the server was running. An hour after `coverageStart` that is missing had 0 running minutes.
-- `samples`: `memory`, `swap`, and `disk` are used fractions; `disk` is the fullest file system. With `since` in the last 24 hours, `step` is 60 and samples are one minute apart; otherwise `step` is 300.
+- `samples`: `memory`, `swap`, and `disk` are used fractions; `disk` is the fullest file system. `cpu` is the percent of the whole server from `/proc/stat`. The disk fields are per second over whole disks from `/proc/diskstats`, and the network fields bytes per second over network cards from `/proc/net/dev` (no loopback, bridges, Docker or VPN interfaces). Older agents leave them out. With `since` in the last 24 hours, `step` is 60 and samples are one minute apart; otherwise `step` is 300.
 - Without `since`, the response covers the full 31 days.
 
 ### `GET /v1/containers/history?name=<container name>&since=<time>`

@@ -12,7 +12,7 @@ make release              # patch: 0.2.1 -> 0.2.2
 make release BUMP=minor   # 0.2.1 -> 0.3.0
 ```
 
-`make release` stops if there are uncommitted changes, or if `CHANGELOG.md` has no section for the new version. Then it:
+`make release` stops if there are uncommitted changes, if `CHANGELOG.md` has no section for the new version, or if the agent version in `agent/VERSION` is not published yet (see "Agent releases"). Then it:
 
 1. Bumps `VERSION`, if the current version is already tagged. An untagged version is released as it is, which is also how a failed release is retried.
 2. Runs `make notarize`: builds, signs, notarizes, staples, and writes `dist/appcast.xml` with the release notes.
@@ -96,7 +96,54 @@ make publish-agent    # upload to R2 under agent/ (inside R2_PREFIX when it is s
 | `agent/install.sh`, `agent/rackpulse-agent-linux-amd64`, `agent/rackpulse-agent-linux-arm64`, `agent/SHA256SUMS` | 5 minutes |
 | `agent/<version>/` with the same files | 1 year, never changes |
 
-When an agent release changes the protocol or adds a feature the app relies on, set `AgentStore.latestVersion` in the app to the new version. The app then offers the update command on the agent's setup page.
+The app offers the agent in `agent/VERSION` as the latest one. `make build` writes it into the app's `Info.plist` as `RackpulseAgentVersion`, and servers with an older agent show an update notice with the command. So publish a new agent before the app release that should offer it. `make release` checks this: it stops if `$SITE_URL/agent/<agent version>/SHA256SUMS` does not exist yet.
+
+The app and the agent keep separate versions. A new app works with older agents and skips what they don't support, so an app release does not need a new agent.
+
+## Dev builds
+
+`make dev` and `make dev-build` both build Rackpulse Dev. `make dev` runs it locally in the foreground and offers the last uploaded dev agent. `make dev-build` also uploads, to try a change from start to finish (the app on your Mac and the agent on a test server):
+
+```bash
+make dev-build              # build, notarize, upload app and agent
+make dev-build NOTARIZE=0   # skip notarizing and the app download, upload only the agent
+```
+
+| | Stable | Rackpulse Dev |
+|---|---|---|
+| App | Installed copy, `dev.rackpulse.mac` | `dist/dev/Rackpulse Dev.app`, `dev.rackpulse.mac.dev` |
+| Settings, database, Keychain | Its own | Its own. Runs next to the stable app |
+| Download | `download/Rackpulse.dmg` | `download/dev/Rackpulse-Dev.dmg` |
+| Agent commands | `agent/install.sh` | `agent/dev/install.sh` |
+| Versions | `VERSION`, `agent/VERSION` | Both plus `-dev.<UTC time>`, so each new dev build shows the agent update notice |
+| Updates | Sparkle | Run `make dev-build` again. It quits Rackpulse Dev, rebuilds it in place and opens it. Servers show the agent update notice |
+| How to tell | | DEV tag in the panel and About, status dot at the top of the menu bar icon, DEV app icon |
+
+Dev files live under `download/` and `agent/`, which publishing the website keeps. They are uploaded with `no-cache`. Install the dev agent on a test server only: it replaces the agent already there.
+
+## Compatibility rules
+
+Users go back to older versions, and servers run older agents. Every change keeps both working.
+
+| Area | Rule |
+|---|---|
+| Database (`rackpulse.sqlite`) | A new schema version only adds tables or columns, in its own `version < N` step. Never rename or drop |
+| Settings | New fields are optional with a default. An older app must read settings written by a newer one |
+| New enum values | Avoid them in saved settings, or decode unknown values to a fallback. Today 0.2.2 resets all alert settings when a rule uses `digest` |
+| Projects | `projects` in UserDefaults holds only Hetzner projects. Projects of any other kind go under `agentProjects`, so an older app never loads a project without a token |
+| Agent-only servers | Host ids are negative, so they never collide with provider ids in `uptime.json` or other stores keyed by server id |
+| Agent API | Only add fields. The app treats missing fields as unsupported |
+| Agent flags | Publish the agent before the app shows a command that uses a new flag |
+
+## Nightly builds (planned)
+
+Not set up yet. The plan:
+
+- `make nightly` publishes a signed build of `main` to `appcast-nightly.xml` and `download/nightly/`. The stable feed and `make release` stay unchanged.
+- Version: the last stable version plus the build time, for example `0.2.2.202610281930`. Sparkle sorts it after 0.2.2 and before 0.2.3.
+- The agent from `main` goes to `agent/nightly/`. `agent/` changes only with a stable release.
+- Settings gets a Stable or Nightly choice. Leaving Nightly keeps the build until a newer stable version exists.
+- A stable release is a nightly that ran for about 3 days without problems.
 
 ## Checks after a release
 

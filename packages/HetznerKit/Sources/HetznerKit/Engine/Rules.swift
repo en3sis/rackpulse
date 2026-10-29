@@ -10,7 +10,7 @@ public enum RuleKind: String, Sendable, Hashable, Codable, CaseIterable {
 }
 
 public enum Delivery: String, Sendable, Hashable, Codable {
-    case push, banner
+    case push, digest, banner
 }
 
 public enum Severity: String, Sendable, Hashable, Codable, Comparable {
@@ -104,14 +104,22 @@ public struct ServerAlertOverride: Sendable, Hashable, Codable {
 }
 
 public struct AlertSettings: Sendable, Hashable, Codable {
+    public static let defaultSummaryMinute = 9 * 60
+
     public var rules: [RuleConfig]
     public var quietHours: QuietHours?
     public var budget: Decimal?
     public var clearAfter: Int
+    public var summaryMinute: Int?
     public var servers: [Int64: ServerAlertOverride] = [:]
 
     enum CodingKeys: String, CodingKey {
-        case rules, quietHours, budget, clearAfter
+        case rules, quietHours, budget, clearAfter, summaryMinute
+    }
+
+    public var dailySummaryMinute: Int {
+        get { summaryMinute ?? Self.defaultSummaryMinute }
+        set { summaryMinute = newValue }
     }
 
     public init(
@@ -245,5 +253,26 @@ public struct AlertState: Sendable, Hashable, Codable {
 
     public func isSnoozed(_ id: String, at now: Date) -> Bool {
         (snoozed[id] ?? .distantPast) > now
+    }
+
+    public static let resumeGap: TimeInterval = 15 * 60
+
+    public var hasPolled: Bool { lastPoll != nil }
+
+    public func sameAlerts(as other: AlertState) -> Bool {
+        tracks == other.tracks && inventory == other.inventory && newestAction == other.newestAction && snoozed == other.snoozed
+    }
+
+    public func resumed(at now: Date) -> AlertState {
+        var state = self
+        state.snoozed = snoozed.filter { $0.value > now }
+        guard let lastPoll, now.timeIntervalSince(lastPoll) > Self.resumeGap else { return state }
+        for (id, track) in tracks where track.alert == nil {
+            state.tracks[id] = nil
+        }
+        for (id, track) in state.tracks where track.alert != nil {
+            state.tracks[id]?.cleared = 0
+        }
+        return state
     }
 }

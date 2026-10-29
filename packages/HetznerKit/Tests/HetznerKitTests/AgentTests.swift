@@ -32,6 +32,41 @@ struct AgentTests {
             #"{"coverageStart":1761400000,"hours":{"1761476400":60},"step":300,"samples":[]}"#.utf8
         ))
         #expect(history.hours[1_761_476_400] == 60)
+        #expect(snapshot.host.tailscale == nil)
+    }
+
+    @Test func agentHistoryBecomesServerMetrics() throws {
+        let json = #"{"coverageStart":1761400000,"step":60,"samples":[{"t":1761480000,"memory":0.5,"swap":0,"disk":0.4,"load":0.2,"cpu":25,"diskReadIOPS":3,"diskWriteIOPS":5,"netOutBytes":1200},{"t":1761480060,"memory":0.5,"swap":0,"disk":0.4,"load":0.2}]}"#
+        let history = try AgentJSON.decoder().decode(AgentHistory.self, from: Data(json.utf8))
+        let metrics = try #require(history.metrics(cores: 4))
+        #expect(metrics.cpuPercent(cores: 4).map(\.value) == [25])
+        #expect(metrics.totalIOPS.map(\.value) == [8])
+        #expect(metrics.points(MetricSeries.networkBandwidthOut).map(\.value) == [1200])
+
+        let start = Date(timeIntervalSince1970: 1761479000)
+        let end = Date(timeIntervalSince1970: 1761480100)
+        let ranged = try #require(history.metrics(cores: 4, from: start, to: end))
+        #expect(ranged.start == start && ranged.end == end)
+        #expect(history.metrics(cores: 4, from: Date(timeIntervalSince1970: 1761480030)) == nil)
+
+        let old = try AgentJSON.decoder().decode(AgentHistory.self, from: Data(
+            #"{"coverageStart":1761400000,"step":60,"samples":[{"t":1761480000,"memory":0.5,"swap":0,"disk":0.4,"load":0.2}]}"#.utf8
+        ))
+        #expect(old.metrics(cores: 4) == nil)
+    }
+
+    @Test func decodesTailscaleNameAndAddress() throws {
+        let json = #"{"hostname":"web-1","os":"","kernel":"","arch":"","serverID":null,"bootTime":1758000000,"cores":2,"load":[],"tailscale":{"name":"web-1.tail0000.ts.net","ip":"100.64.0.7"}}"#
+        let host = try AgentJSON.decoder().decode(AgentSnapshot.Host.self, from: Data(json.utf8))
+        #expect(host.tailscale?.name == "web-1.tail0000.ts.net")
+        #expect(host.tailscale?.ip == "100.64.0.7")
+    }
+
+    @Test func stoppedContainersAreNeverUnhealthy() {
+        let running = AgentSnapshot.Container(id: "1", name: "api", image: "x", state: "running", health: "unhealthy")
+        let stopped = AgentSnapshot.Container(id: "2", name: "api.old", image: "x", state: "exited", health: "unhealthy")
+        #expect(running.isUnhealthy)
+        #expect(!stopped.isUnhealthy)
     }
 
     @Test func timelinePrefersAgentThenRackpulseThenHetzner() {

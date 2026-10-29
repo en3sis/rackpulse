@@ -94,9 +94,7 @@ public struct RuleEngine: Sendable {
     }
 
     private func shouldNotify(_ alert: FiringAlert, rule: RuleConfig, state: AlertState, now: Date) -> Bool {
-        guard rule.delivery == .push, !state.isSnoozed(alert.id, at: now) else { return false }
-        if let quiet = settings.quietHours, quiet.contains(now, calendar: calendar) { return false }
-        return true
+        rule.delivery != .banner && !state.isSnoozed(alert.id, at: now)
     }
 
     private func evaluatedKinds(_ snapshot: PollSnapshot) -> Set<RuleKind> {
@@ -111,7 +109,7 @@ public struct RuleEngine: Sendable {
         let now = snapshot.time
 
         for server in snapshot.servers {
-            if settings.rule(.serverDown, server: server.id) != nil {
+            if !server.agentOnly, settings.rule(.serverDown, server: server.id) != nil {
                 let down = server.status != .running && !stoppedByUser(server, actions: snapshot.actions)
                 result.append(Observation(
                     id: "serverDown:\(server.id)", kind: .serverDown, serverID: server.id, level: down ? .above : .below,
@@ -198,7 +196,7 @@ public struct RuleEngine: Sendable {
             result.append(Observation(
                 id: "agentUnreachable:\(server.id)", kind: .agentUnreachable, serverID: server.id,
                 level: unreachable ? .above : .below, severity: .warning,
-                title: "\(name) is running, but its agent does not answer"
+                title: server.agentOnly ? "\(name) does not answer" : "\(name) is running, but its agent does not answer"
             ))
         }
         guard let snapshot = report.current else { return result }

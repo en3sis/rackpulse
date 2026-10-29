@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.3.0
+
+### App
+
+- Each alert notifies once, also after Rackpulse restarts. Alert state and a log of sent notifications are kept in a local database.
+- Many alerts at once arrive as one notification. Alerts during quiet hours arrive as one summary when they end.
+- Choose per rule between a notification, a daily summary, or the popover only. Set the summary time in Settings, Alerts.
+- Stopped Docker containers no longer count as unhealthy.
+- A new agent setup: choose how your Mac reaches the server (Tailscale, private network, public IP, or another address) and get the matching command and firewall steps. The pairing key is hidden in the command. Change a paired agent's address without pairing again.
+- Agent data shows right after Rackpulse starts, instead of after the first check interval.
+- While a server's page is open, its agent is read every 5 seconds.
+- Add servers that run only the agent, with no provider account: home lab, bare metal or any cloud. They live in their own projects. Power controls, traffic and the Console are not available for them, and they count in Costs only with a price you enter.
+- Adding servers starts with a choice of provider. Hetzner Cloud is available, and AWS, DigitalOcean and Railway are listed as coming soon.
+- On a Mac with Tailscale, the agent setup finds the server by its name in your tailnet, so you no longer type an address. A server that is not paired yet can be removed from its setup page.
+- Servers with only the agent get the same CPU, disk I/O and network charts as cloud servers, and the CPU and disk I/O alerts. Rows for these servers show the same columns as the others, with the OS and address in tooltips.
+- An agent server's Disk tile shows its system disk, named by type (SD card, eMMC, NVMe, USB drive and others). Other drives and volumes are listed below it with their usage.
+- The server list opens in the detailed view each time. The refresh icon finishes its turn, and the label reads "Updated 12s ago".
+
+### Agent
+
+- `--listen tailscale` listens on the server's Tailscale address.
+- If ufw is active, the installer allows the agent's port, and uninstall removes the rule.
+- The installer saves the server's Tailscale MagicDNS name, and the agent reports it with its Tailscale address.
+- The agent records CPU use, disk reads and writes, and network traffic every minute, kept for 31 days like memory and disk space.
+- Each disk reports its device type (SD card, eMMC, NVMe, USB, SSD, hard disk, virtual) and model. `/dev/root` is reported as the real device.
+
 ## 0.2.2
 
 ### App

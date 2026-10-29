@@ -22,95 +22,195 @@ struct AgentNotice: View {
     }
 
     let kind: Kind
+    var title: String?
     let text: String
     var action: (title: String, run: () -> Void)?
-    var copy: String?
+    var commands: [String] = []
+    var collapseKey: String?
 
-    @State private var copied = false
+    @State private var copied: String?
+    @AppStorage("collapsedNotices") private var collapsedNotices = ""
+
+    private var collapsed: Bool {
+        guard let collapseKey else { return false }
+        return collapsedNotices.split(separator: "\n").contains { $0 == collapseKey }
+    }
+
+    private var details: Bool { title != nil || !commands.isEmpty }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: kind.icon).font(.system(size: 11)).foregroundStyle(kind.color)
-            Text(text).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            if let action {
-                Button(action.title, action: action.run)
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
-            }
-            if let copy {
-                Button(copied ? "Copied" : "Copy command") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(copy, forType: .string)
-                    copied = true
-                    Task {
-                        try? await Task.sleep(for: .seconds(1.5))
-                        copied = false
-                    }
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: kind.icon)
+                    .font(.system(size: 11))
+                    .foregroundStyle(kind.color)
+                    .frame(width: 12)
+                Text(title ?? text)
+                    .font(.system(size: 12, weight: title == nil ? .regular : .semibold))
+                    .lineLimit(collapsed ? 1 : nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                if let action {
+                    Button(action.title, action: action.run)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
                 }
-                .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(copied ? Theme.green : Color.accentColor)
-                .help(copy)
+                if collapseKey != nil {
+                    Button(action: toggle) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Theme.secondary)
+                            .rotationEffect(.degrees(collapsed ? -90 : 0))
+                            .frame(width: 16, height: 16)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(collapsed ? "Show details" : "Hide details")
+                    .accessibilityLabel(collapsed ? "Show details" : "Hide details")
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { if collapseKey != nil { toggle() } }
+            if !collapsed && details {
+                VStack(alignment: .leading, spacing: 6) {
+                    if title != nil {
+                        Text(text)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    ForEach(commands, id: \.self, content: command)
+                }
+                .padding(.leading, 20)
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(kind.color.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
+
+    private func toggle() {
+        guard let collapseKey else { return }
+        var keys = collapsedNotices.split(separator: "\n").map(String.init).filter { $0 != collapseKey }
+        if !collapsed { keys.append(collapseKey) }
+        withAnimation(.easeInOut(duration: 0.15)) { collapsedNotices = keys.joined(separator: "\n") }
+    }
+
+    private func command(_ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(value.trimmingCharacters(in: .whitespaces))
+                .font(.system(size: 11, design: .monospaced))
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            Spacer(minLength: 0)
+            Button(copied == value ? "Copied" : "Copy") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(value, forType: .string)
+                copied = value
+                Task {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    if copied == value { copied = nil }
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(copied == value ? Theme.green : Color.accentColor)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 6))
+        .help(value)
+    }
 }
 
 struct AgentOverview: View {
+    enum Part { case notices, stats }
+
     let server: Server
     let project: Project
     let monitor: Monitor
+    var part: Part = .notices
     let openSetup: () -> Void
     let openDocker: () -> Void
 
     var body: some View {
         let store = monitor.agents
-        let link = store.link(project.id, server.id)
         let state = store.state(project.id, server.id)
         VStack(spacing: 8) {
-            if let problem = state?.problem, let link {
-                AgentNotice(kind: .warning, text: problem.text(link), action: ("Help", openSetup))
-            }
-            if store.needsUpdate(project.id, server.id) {
-                AgentNotice(
-                    kind: .info,
-                    text: "Agent \(AgentStore.latestVersion) is available. Run the update command on the server as root. It keeps the key and settings.",
-                    copy: AgentStore.updateCommand
-                )
-            }
-            if let snapshot = state?.snapshot {
-                tiles(snapshot)
-                ForEach(Array(issues(snapshot).enumerated()), id: \.offset) { _, issue in issue }
-            } else if state?.problem == nil {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Connecting to the agent…").font(.system(size: 12)).foregroundStyle(Theme.secondary)
-                    Spacer(minLength: 0)
-                }
-                .padding(10)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
+            switch part {
+            case .notices: notices(state)
+            case .stats: stats(state)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 12)
+        .padding(.top, part == .stats || hasNotices(state) ? 12 : 0)
+    }
+
+    private func hasNotices(_ state: AgentState?) -> Bool {
+        let store = monitor.agents
+        if state?.problem != nil && store.link(project.id, server.id) != nil { return true }
+        if store.needsUpdate(project.id, server.id) { return true }
+        return state?.snapshot.map { !issues($0).isEmpty } ?? false
+    }
+
+    @ViewBuilder
+    private func notices(_ state: AgentState?) -> some View {
+        let store = monitor.agents
+        let key = AgentStore.key(project.id, server.id)
+        if let problem = state?.problem, let link = store.link(project.id, server.id) {
+            AgentNotice(kind: .warning, text: problem.text(link), action: ("Help", openSetup), collapseKey: "\(key)|problem")
+        }
+        if store.needsUpdate(project.id, server.id) {
+            AgentNotice(
+                kind: .info,
+                title: "Agent update available",
+                text: "Version \(AgentStore.latestVersion). Run this on the server as root. It keeps the key and settings.",
+                commands: [AgentStore.updateCommand],
+                collapseKey: "\(key)|update|\(AgentStore.latestVersion)"
+            )
+        }
+        if let snapshot = state?.snapshot {
+            ForEach(Array(issues(snapshot).enumerated()), id: \.offset) { _, issue in issue }
+        }
+    }
+
+    @ViewBuilder
+    private func stats(_ state: AgentState?) -> some View {
+        if let snapshot = state?.snapshot {
+            tiles(snapshot)
+            let others = snapshot.disks.filter { $0.id != snapshot.systemDisk?.id && !$0.mount.hasPrefix("/boot") }
+            if !others.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(others.enumerated()), id: \.element.id) { index, disk in
+                        StorageRow(disk: disk, divider: index < others.count - 1)
+                    }
+                }
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
+            }
+        } else if state?.problem == nil {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Connecting to the agent…").font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
+        }
     }
 
     private func tiles(_ snapshot: AgentSnapshot) -> some View {
         let memory = snapshot.memory
-        let fullest = snapshot.disks.max { $0.usedFraction < $1.usedFraction }
+        let system = snapshot.systemDisk
         return HStack(spacing: 8) {
             tile("Memory", icon: "memorychip", value: Format.percent(memory.usedFraction * 100),
                  detail: "\(Format.memory(memory.used)) of \(Format.memory(memory.total))", fraction: memory.usedFraction)
-            if let fullest {
-                tile(fullest.mount == "/" ? "Disk" : "Disk \(fullest.mount)", icon: "internaldrive",
-                     value: Format.percent(fullest.usedFraction * 100),
-                     detail: "\(Format.size(fullest.used)) of \(Format.size(fullest.used + fullest.available))",
-                     fraction: fullest.usedFraction)
+            if let system {
+                tile(system.kindName ?? "Disk", icon: system.icon,
+                     value: Format.percent(system.usedFraction * 100),
+                     detail: "\(Format.size(system.used)) of \(Format.size(system.used + system.available))",
+                     fraction: system.usedFraction)
+                    .help(system.summary)
             }
             tile("Up", icon: "power", value: Format.compactDuration(since: snapshot.host.bootTime),
                  detail: snapshot.host.load.first.map { "load \(String(format: "%.2f", $0))" } ?? "", fraction: nil)
@@ -142,23 +242,39 @@ struct AgentOverview: View {
     }
 
     private func issues(_ snapshot: AgentSnapshot) -> [AgentNotice] {
+        let key = AgentStore.key(project.id, server.id)
         var result: [AgentNotice] = []
         for disk in snapshot.disks where disk.readOnly {
-            result.append(AgentNotice(kind: .problem, text: "\(disk.mount) is read-only. The file system may have errors."))
+            result.append(AgentNotice(kind: .problem, text: "\(disk.mount) is read-only. The file system may have errors.",
+                                      collapseKey: "\(key)|readonly|\(disk.mount)"))
         }
         for disk in snapshot.disks where !disk.readOnly && disk.usedFraction >= 0.9 {
-            result.append(AgentNotice(kind: .warning, text: "\(disk.mount) is \(Format.percent(disk.usedFraction * 100)) full."))
+            result.append(AgentNotice(kind: .warning, text: "\(disk.mount) is \(Format.percent(disk.usedFraction * 100)) full.",
+                                      collapseKey: "\(key)|full|\(disk.mount)"))
         }
         for unit in snapshot.system.failedUnits {
-            result.append(AgentNotice(kind: .problem, text: "\(unit) failed. Check it with systemctl status \(unit)."))
+            result.append(AgentNotice(
+                kind: .problem,
+                title: "\(unit) failed",
+                text: "Run on the server: status shows why it failed, reset-failed clears it once fixed.",
+                commands: ["sudo systemctl status \(unit)", "sudo systemctl reset-failed \(unit)"],
+                collapseKey: "\(key)|failed|\(unit)"
+            ))
         }
         let troubled = (snapshot.docker?.containers ?? []).filter { $0.isUnhealthy || $0.isRestartLoop || $0.crashed(within: 3_600, now: .now) }
         if !troubled.isEmpty {
             let names = troubled.prefix(2).map(\.name).joined(separator: ", ") + (troubled.count > 2 ? " and \(troubled.count - 2) more" : "")
-            result.append(AgentNotice(kind: .warning, text: "Docker: \(names) need\(troubled.count == 1 ? "s" : "") attention.", action: ("Show", openDocker)))
+            result.append(AgentNotice(kind: .warning, text: "Docker: \(names) need\(troubled.count == 1 ? "s" : "") attention.", action: ("Show", openDocker),
+                                      collapseKey: "\(key)|docker"))
         }
         if snapshot.system.rebootRequired {
-            result.append(AgentNotice(kind: .info, text: "Updates were installed that need a reboot."))
+            result.append(AgentNotice(
+                kind: .info,
+                title: "Reboot needed",
+                text: "Updates were installed that need a reboot.",
+                commands: ["sudo reboot"],
+                collapseKey: "\(key)|reboot"
+            ))
         }
         return result
     }
@@ -178,7 +294,9 @@ struct AgentInvitation: View {
                 Text("Memory, disk space and Docker").font(.system(size: 12, weight: .semibold))
             }
             Text(link == nil
-                 ? "The Hetzner API does not report what happens inside the server. Install the optional Rackpulse agent to see it here."
+                 ? (server.agentOnly
+                    ? "This server has no provider API. Install the Rackpulse agent to see it in Rackpulse."
+                    : "The provider's API does not report what happens inside the server. Install the optional Rackpulse agent to see it here.")
                  : "Agent setup is not finished. Rackpulse is waiting for the agent at \(link?.place ?? "").")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.secondary)
@@ -693,5 +811,86 @@ struct InfoRow: View {
         .overlay(alignment: .top) {
             Theme.divider.frame(height: 1).padding(.leading, 44)
         }
+    }
+}
+
+struct StorageRow: View {
+    let disk: AgentSnapshot.Disk
+    var divider = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Image(systemName: disk.icon)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.secondary)
+                    .frame(width: 16)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Text(disk.mount).font(.system(size: 12, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+                        if disk.readOnly {
+                            Text("read-only").font(.system(size: 11)).foregroundStyle(Theme.red)
+                        }
+                    }
+                    Text(disk.details).font(.system(size: 11)).foregroundStyle(Theme.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Text("\(Format.size(disk.used)) of \(Format.size(disk.used + disk.available))")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(disk.usedFraction >= 0.9 ? Theme.orange : Theme.text)
+            }
+            UsageBar(fraction: disk.usedFraction, color: UsageBar.color(disk.usedFraction, warn: disk.readOnly))
+                .padding(.leading, 24)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) {
+            if divider { Theme.divider.frame(height: 1).padding(.horizontal, 10) }
+        }
+        .help(disk.summary)
+    }
+}
+
+extension AgentSnapshot {
+    var systemDisk: Disk? {
+        disks.first { $0.mount == "/" } ?? disks.max { $0.total < $1.total }
+    }
+}
+
+extension AgentSnapshot.Disk {
+    var kindName: String? {
+        switch kind {
+        case "sd": "SD card"
+        case "emmc": "eMMC"
+        case "nvme": "NVMe SSD"
+        case "usb": "USB drive"
+        case "ssd": "SSD"
+        case "hdd": "Hard disk"
+        case "virtual": "Virtual disk"
+        case "ram": "RAM disk"
+        case "image": "Disk image"
+        case "raid": "RAID"
+        case "mapped": "Mapped volume"
+        default: nil
+        }
+    }
+
+    var icon: String {
+        switch kind {
+        case "sd": "sdcard"
+        case "emmc", "ram": "memorychip"
+        case "usb": "externaldrive"
+        case "raid": "square.stack.3d.up"
+        case "image": "opticaldisc"
+        default: "internaldrive"
+        }
+    }
+
+    var details: String {
+        [kindName, model, fs].compactMap { $0?.nonEmpty }.joined(separator: " · ")
+    }
+
+    var summary: String {
+        [mount, details, device].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }

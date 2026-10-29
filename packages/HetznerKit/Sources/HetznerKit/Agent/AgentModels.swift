@@ -8,8 +8,10 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
     public let disks: [Disk]
     public let system: System
     public let docker: Docker?
+    public let activity: Activity?
 
-    public init(version: String, time: Date, host: Host, memory: Memory, disks: [Disk], system: System, docker: Docker?) {
+    public init(version: String, time: Date, host: Host, memory: Memory, disks: [Disk], system: System, docker: Docker?,
+                activity: Activity? = nil) {
         self.version = version
         self.time = time
         self.host = host
@@ -17,6 +19,11 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
         self.disks = disks
         self.system = system
         self.docker = docker
+        self.activity = activity
+    }
+
+    public struct Activity: Sendable, Hashable, Codable {
+        public let cpu: Double
     }
 
     public var reportsReadOnly: Bool {
@@ -27,9 +34,9 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
         guard !reportsReadOnly else { return self }
         let disks = disks.map {
             Disk(mount: $0.mount, device: $0.device, fs: $0.fs, total: $0.total, used: $0.used, available: $0.available,
-                 inodesTotal: $0.inodesTotal, inodesUsed: $0.inodesUsed, readOnly: false)
+                 inodesTotal: $0.inodesTotal, inodesUsed: $0.inodesUsed, readOnly: false, kind: $0.kind, model: $0.model)
         }
-        return AgentSnapshot(version: version, time: time, host: host, memory: memory, disks: disks, system: system, docker: docker)
+        return AgentSnapshot(version: version, time: time, host: host, memory: memory, disks: disks, system: system, docker: docker, activity: activity)
     }
 
     public struct Host: Sendable, Hashable, Codable {
@@ -41,8 +48,20 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
         public let bootTime: Date
         public let cores: Int
         public let load: [Double]
+        public let tailscale: Tailscale?
 
-        public init(hostname: String, os: String, kernel: String, arch: String, serverID: Int64?, bootTime: Date, cores: Int, load: [Double]) {
+        public struct Tailscale: Sendable, Hashable, Codable {
+            public let name: String?
+            public let ip: String?
+
+            public init(name: String?, ip: String?) {
+                self.name = name
+                self.ip = ip
+            }
+        }
+
+        public init(hostname: String, os: String, kernel: String, arch: String, serverID: Int64?, bootTime: Date, cores: Int, load: [Double],
+                    tailscale: Tailscale? = nil) {
             self.hostname = hostname
             self.os = os
             self.kernel = kernel
@@ -51,6 +70,7 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
             self.bootTime = bootTime
             self.cores = cores
             self.load = load
+            self.tailscale = tailscale
         }
     }
 
@@ -83,10 +103,12 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
         public let inodesTotal: Int64
         public let inodesUsed: Int64
         public let readOnly: Bool
+        public let kind: String?
+        public let model: String?
 
         public init(
             mount: String, device: String, fs: String, total: Int64, used: Int64, available: Int64,
-            inodesTotal: Int64 = 0, inodesUsed: Int64 = 0, readOnly: Bool = false
+            inodesTotal: Int64 = 0, inodesUsed: Int64 = 0, readOnly: Bool = false, kind: String? = nil, model: String? = nil
         ) {
             self.mount = mount
             self.device = device
@@ -97,6 +119,8 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
             self.inodesTotal = inodesTotal
             self.inodesUsed = inodesUsed
             self.readOnly = readOnly
+            self.kind = kind
+            self.model = model
         }
 
         public var id: String { device }
@@ -246,7 +270,7 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
         public static let stopSignals: Set<Int> = [0, 130, 137, 143]
 
         public var isRunning: Bool { state == "running" }
-        public var isUnhealthy: Bool { health == "unhealthy" }
+        public var isUnhealthy: Bool { isRunning && health == "unhealthy" }
         public var isRestartLoop: Bool { state == "restarting" || restartsLastHour >= 3 }
 
         public func crashed(within interval: TimeInterval, now: Date) -> Bool {
@@ -314,6 +338,13 @@ public struct AgentHistory: Sendable, Hashable, Codable {
         public let swap: Double
         public let disk: Double
         public let load: Double
+        public var cpu: Double?
+        public var diskReadIOPS: Double?
+        public var diskWriteIOPS: Double?
+        public var diskReadBytes: Double?
+        public var diskWriteBytes: Double?
+        public var netInBytes: Double?
+        public var netOutBytes: Double?
 
         public init(t: Date, memory: Double, swap: Double, disk: Double, load: Double) {
             self.t = t
@@ -322,6 +353,28 @@ public struct AgentHistory: Sendable, Hashable, Codable {
             self.disk = disk
             self.load = load
         }
+    }
+
+    public var hasActivity: Bool {
+        samples.contains { $0.cpu != nil }
+    }
+
+    public func metrics(cores: Double, from start: Date? = nil, to end: Date? = nil) -> ServerMetrics? {
+        let samples = start.map { start in self.samples.filter { $0.t >= start } } ?? self.samples
+        guard samples.contains(where: { $0.cpu != nil }), let first = samples.first, let last = samples.last else { return nil }
+        func series(_ value: (Sample) -> Double?) -> [MetricPoint] {
+            samples.compactMap { sample in value(sample).map { MetricPoint(time: sample.t, value: $0) } }
+        }
+        let scale = max(cores, 1)
+        return ServerMetrics(start: start ?? first.t, end: max(end ?? last.t, last.t), step: Double(step), series: [
+            MetricSeries.cpu: series { $0.cpu.map { $0 * scale } },
+            MetricSeries.diskIOPSRead: series(\.diskReadIOPS),
+            MetricSeries.diskIOPSWrite: series(\.diskWriteIOPS),
+            MetricSeries.diskBandwidthRead: series(\.diskReadBytes),
+            MetricSeries.diskBandwidthWrite: series(\.diskWriteBytes),
+            MetricSeries.networkBandwidthIn: series(\.netInBytes),
+            MetricSeries.networkBandwidthOut: series(\.netOutBytes),
+        ])
     }
 
     public func uptime(asOf date: Date) -> AgentUptime {

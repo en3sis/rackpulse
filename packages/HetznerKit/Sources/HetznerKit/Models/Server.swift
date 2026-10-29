@@ -27,6 +27,7 @@ public struct Server: Sendable, Hashable, Decodable, Identifiable {
     public let locked: Bool
     public let primaryDiskSize: Double
     public let privateNet: [PrivateAddress]?
+    public var agentOnly = false
 
     public init(
         id: Int64,

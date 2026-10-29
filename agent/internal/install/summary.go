@@ -4,17 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 
 	"github.com/en3sis/rackpulse/agent/internal/collect"
 	"github.com/en3sis/rackpulse/agent/internal/config"
 )
-
-func isTailscaleAddress(ip net.IP) bool {
-	_, v4, _ := net.ParseCIDR("100.64.0.0/10")
-	_, v6, _ := net.ParseCIDR("fd7a:115c:a1e0::/48")
-	return v4.Contains(ip) || v6.Contains(ip)
-}
 
 func printSummary(cfg config.Config, summary installSummary, version string) {
 	if summary.updated {
@@ -26,6 +19,9 @@ func printSummary(cfg config.Config, summary installSummary, version string) {
 		fmt.Printf("It listens on TCP port %d on all addresses.\n", cfg.Port)
 	} else {
 		fmt.Printf("It listens on TCP port %d on %s.\n", cfg.Port, cfg.Listen)
+	}
+	if cfg.TailscaleName != "" {
+		fmt.Printf("Tailscale name: %s\n", cfg.TailscaleName)
 	}
 	switch {
 	case summary.migrated:
@@ -53,7 +49,7 @@ func printSummary(cfg config.Config, summary installSummary, version string) {
 	ip := net.ParseIP(cfg.Listen)
 	tailscale := ip != nil && isTailscaleAddress(ip)
 	private := ip != nil && !tailscale && (ip.IsPrivate() || ip.IsLoopback())
-	ufwActive := strings.Contains(commandOutput("ufw", "status"), "Status: active")
+	ufwOn := summary.ufw != ufwOff
 	firewalldRunning := commandOutput("firewall-cmd", "--state") == "running"
 	_, metadataErr := collect.FetchServerID(context.Background())
 	onHetzner := metadataErr == nil
@@ -61,7 +57,10 @@ func printSummary(cfg config.Config, summary installSummary, version string) {
 	fmt.Println()
 	fmt.Println("Firewall:")
 	advice := 0
-	if ufwActive {
+	if summary.ufw == ufwAllowed {
+		fmt.Printf("  ufw is active. Allowed TCP port %d %s.\n", cfg.Port, ufwScope(cfg))
+		advice++
+	} else if ufwOn {
 		if tailscale {
 			fmt.Printf("  ufw is active. Allow the port on Tailscale: sudo ufw allow in on tailscale0 to any port %d proto tcp\n", cfg.Port)
 		} else {

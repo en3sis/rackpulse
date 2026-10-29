@@ -2,8 +2,8 @@ import Foundation
 import Security
 
 enum Keychain {
-    static let service = "dev.rackpulse.cloud-token"
-    static let agentService = "dev.rackpulse.agent-key"
+    static let service = "dev.rackpulse.cloud-token" + Flavor.keychainSuffix
+    static let agentService = "dev.rackpulse.agent-key" + Flavor.keychainSuffix
 
     enum Failure: Error {
         case status(OSStatus)

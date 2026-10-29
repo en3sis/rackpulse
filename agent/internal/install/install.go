@@ -20,10 +20,10 @@ func Run(args []string, version string) error {
 	flags := flag.NewFlagSet("install", flag.ContinueOnError)
 	pair := flags.String("pair", "", "pairing key from Rackpulse")
 	port := flags.Int("port", config.DefaultPort, "TCP port")
-	listen := flags.String("listen", "", "listen only on this address")
+	listen := flags.String("listen", "", "listen only on this address, or tailscale")
 	flags.SetOutput(io.Discard)
 	if err := flags.Parse(args); err != nil {
-		return fmt.Errorf("%v. Options: --pair <key>, --port <port>, --listen <ip>", err)
+		return fmt.Errorf("%v. Options: --pair <key>, --port <port>, --listen <ip|tailscale>", err)
 	}
 	if flags.NArg() > 0 {
 		return fmt.Errorf("Unexpected argument %q", flags.Arg(0))
@@ -63,6 +63,16 @@ func Run(args []string, version string) error {
 	}
 	if set["listen"] {
 		cfg.Listen = *listen
+		if *listen == tailscaleListen {
+			address, err := tailscaleAddress()
+			if err != nil {
+				return err
+			}
+			cfg.Listen = address
+		}
+	}
+	if name := tailscaleName(); name != "" {
+		cfg.TailscaleName = name
 	}
 	if cfg.Token == "" {
 		return errors.New("No pairing key. Run the command from Rackpulse, which includes --pair rb1_...")
@@ -123,6 +133,18 @@ func Run(args []string, version string) error {
 		return fmt.Errorf("The service did not start listening on %s. See: journalctl -u rackpulse-agent -n 20", cfg.Address())
 	}
 	summary := installSummary{updated: wasActive || hadConfig, replacedKey: replacedKey, backfilled: backfilled}
+	if ufwActive() {
+		var previous *config.Config
+		if hadConfig {
+			previous = &existing
+		}
+		if err := allowInUFW(cfg, previous); err != nil {
+			fmt.Fprintf(os.Stderr, "Could not add the ufw rule: %v\n", err)
+			summary.ufw = ufwManual
+		} else {
+			summary.ufw = ufwAllowed
+		}
+	}
 	if migrating {
 		summary.migrated = true
 		summary.certKept = certKept
@@ -142,7 +164,16 @@ type installSummary struct {
 	migrated    bool
 	certKept    bool
 	newKey      bool
+	ufw         ufwState
 }
+
+type ufwState int
+
+const (
+	ufwOff ufwState = iota
+	ufwAllowed
+	ufwManual
+)
 
 func installBinary() error {
 	self, err := os.Executable()

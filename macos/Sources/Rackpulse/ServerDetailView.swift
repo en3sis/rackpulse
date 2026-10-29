@@ -147,6 +147,7 @@ struct ServerDetailView: View {
         if hasAgent {
             AgentOverview(server: server, project: project, monitor: monitor, openSetup: openAgent, openDocker: { tab = .docker })
         }
+        if !server.agentOnly || hasAgent {
         SectionHeader("Activity")
             .padding(.top, 18)
         SegmentedControl(selection: $range, options: MetricRange.allCases.map { ($0, $0.rawValue) })
@@ -160,8 +161,9 @@ struct ServerDetailView: View {
                 .padding(.top, 6)
         }
         VStack(spacing: 14) {
-            cpuChart
+            if showsActivity { cpuChart }
             if hasAgent { memoryChart }
+            if showsActivity {
             pairChart(
                 title: "Disk IOPS", detail: "read / write",
                 first: ("Read", metrics?.points(MetricSeries.diskIOPSRead) ?? []),
@@ -174,13 +176,25 @@ struct ServerDetailView: View {
                 second: ("Out", metrics?.points(MetricSeries.networkBandwidthOut) ?? []),
                 format: Format.rate
             )
+            }
+            if server.agentOnly && hasAgent && metrics != nil && !showsActivity && monitor.agents.needsUpdate(project.id, server.id) {
+                Text("Update the agent on \(server.name) to see CPU, disk and network charts.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
 
-        UptimeCard(timeline: timeline, hasAgent: hasAgent)
+        if hasAgent {
+            AgentOverview(server: server, project: project, monitor: monitor, part: .stats, openSetup: openAgent, openDocker: { tab = .docker })
+                .padding(.top, 4)
+        }
+        UptimeCard(timeline: timeline, hasAgent: hasAgent, agentOnly: server.agentOnly)
             .padding(.horizontal, 16)
             .padding(.top, 16)
+        }
 
         if !hasAgent {
             SectionHeader("Inside the server")
@@ -233,12 +247,14 @@ struct ServerDetailView: View {
                 HStack(spacing: 6) {
                     Circle().fill(statusColor).frame(width: 8, height: 8)
                     Text(server.name).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                    if server.agentOnly { ProviderTag(provider: .agent) }
                     environmentMenu
                 }
                 Text(spec)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.secondary)
                     .lineLimit(1)
+                    .help(spec)
             }
             Spacer(minLength: 0)
             if project.access == .readWrite {
@@ -397,6 +413,13 @@ struct ServerDetailView: View {
         }
     }
 
+    private var showsActivity: Bool {
+        guard server.agentOnly else { return true }
+        guard hasAgent else { return false }
+        if snapshot?.activity != nil { return true }
+        return metrics.map { !$0.points(MetricSeries.cpu).isEmpty } ?? false
+    }
+
     private var hasAgent: Bool {
         monitor.agents.link(project.id, server.id)?.isPaired == true
     }
@@ -468,7 +491,8 @@ struct ServerDetailView: View {
 
     private var domain: ClosedRange<Date> {
         let end = metrics?.end ?? .now
-        let start = max(metrics?.start ?? end.addingTimeInterval(-range.seconds), server.created)
+        let first = metrics?.start ?? end.addingTimeInterval(-range.seconds)
+        let start = server.agentOnly ? first : max(first, server.created)
         return start < end ? start...end : end.addingTimeInterval(-60)...end
     }
 
@@ -478,7 +502,7 @@ struct ServerDetailView: View {
     }
 
     private var newerThanRangeNote: String? {
-        guard let start = metrics?.start, server.created > start else { return nil }
+        guard !server.agentOnly, let start = metrics?.start, server.created > start else { return nil }
         let created = server.created.formatted(.dateTime.month(.abbreviated).day())
         return "Created \(created), so this shows \(Format.compactDuration(since: server.created))."
     }
@@ -524,7 +548,49 @@ struct ServerDetailView: View {
         return server.status == .running ? "No data for this period." : "No data while the server is off."
     }
 
+    @ViewBuilder
     private var facts: some View {
+        if server.agentOnly { agentFacts } else { providerFacts }
+    }
+
+    private var agentFacts: some View {
+        let link = monitor.agents.link(project.id, server.id)
+        return LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+            fact("Status", agentStatusText, icon: "power", accent: agentAnswering ? Theme.green : nil)
+            fact("Address", link?.endpoint.display ?? "Not paired", icon: "network")
+            fact("System", snapshot.map { "\($0.host.os) · \($0.host.arch)" } ?? "Unknown", icon: "cpu")
+            fact("Kernel", snapshot?.host.kernel ?? "Unknown", icon: "gearshape.2")
+            fact("Alerts", alertsText, icon: alertMode == .off ? "bell.slash" : "bell")
+            fact("Agent", link?.version ?? "Not paired", icon: "antenna.radiowaves.left.and.right")
+            if let report = monitor.costReport(for: project.id) {
+                let user = monitor.costEstimator(for: project.id).userPrice(server.id)
+                let spent = report.lines.filter { $0.kind == .server && $0.resourceID == server.id }.reduce(Decimal(0)) { $0 + $1.monthToDate }
+                priceFact("Your price", user.map { "\(money($0, report.currency)) a month" } ?? "Add a price",
+                          help: "This server has no list price. Click to enter the monthly price you pay.")
+                if user != nil {
+                    priceFact("Cost this month", money(spent, report.currency), help: "Estimated from your price since the start of the month.")
+                }
+            }
+        }
+    }
+
+    private var agentAnswering: Bool {
+        guard let state = monitor.agents.state(project.id, server.id) else { return false }
+        return state.snapshot != nil && state.problem == nil && !agentUnreachable
+    }
+
+    private var agentUnreachable: Bool {
+        poller.visibleAlerts.contains { $0.kind == .agentUnreachable && $0.id.hasSuffix(":\(server.id)") }
+    }
+
+    private var agentStatusText: String {
+        guard hasAgent else { return "Not paired" }
+        guard agentAnswering else { return "Not answering" }
+        guard let boot = snapshot?.host.bootTime else { return "Answering" }
+        return "Up \(Format.compactDuration(since: boot))"
+    }
+
+    private var providerFacts: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
             fact("Status", statusText, icon: "power", accent: server.status == .running ? Theme.green : nil, help: statusHelp)
             fact("Traffic out", trafficText, icon: "arrow.up.arrow.down")
@@ -542,7 +608,7 @@ struct ServerDetailView: View {
                     .reduce(Decimal(0)) { $0 + $1.monthToDate }
                 priceFact(user == nil ? "List price" : "Your price", monthly.map { "\(money($0, report.currency)) a month" } ?? "Unknown",
                           help: user == nil
-                              ? "Hetzner's list price for this server type. Click to enter the price you pay."
+                              ? "\(project.provider.name)'s list price for this server type. Click to enter the price you pay."
                               : "The monthly price you entered. Click to change or clear it.")
                 priceFact("Cost this month", money(spent, report.currency),
                           help: "Estimated cost of this server and its backups since the start of the month.")
@@ -571,7 +637,9 @@ struct ServerDetailView: View {
         let matched = Set([root?.id].compactMap { $0 } + volumeMounts.values.map(\.id))
         let others = mounts.filter { !matched.contains($0.id) }
         return VStack(spacing: 0) {
-            diskRow(icon: "internaldrive", name: "Local disk", meta: "Included with \(server.serverType.name.uppercased())",
+            diskRow(icon: server.agentOnly ? root?.icon ?? "internaldrive" : "internaldrive",
+                    name: server.agentOnly ? "System disk" : "Local disk",
+                    meta: server.agentOnly ? (root.map { "/ · \($0.details)" } ?? "/") : "Included with \(server.serverType.name.uppercased())",
                     size: local, usage: root, divider: !volumes.isEmpty || !others.isEmpty)
             ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
                 diskRow(
@@ -584,7 +652,7 @@ struct ServerDetailView: View {
                 )
             }
             ForEach(Array(others.enumerated()), id: \.element.id) { index, disk in
-                diskRow(icon: "folder", name: disk.mount, meta: "\(disk.fs) · \(disk.device)",
+                diskRow(icon: disk.icon, name: disk.mount, meta: [disk.details, disk.device].filter { !$0.isEmpty }.joined(separator: " · "),
                         size: nil, usage: disk, divider: index < others.count - 1)
             }
         }
@@ -674,23 +742,34 @@ struct ServerDetailView: View {
                 .font(.system(size: 11, weight: accent == nil ? .regular : .semibold))
                 .foregroundStyle(accent ?? Theme.secondary)
                 .labelStyle(FactLabelStyle())
-            Text(value).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.text).lineLimit(1)
+            Text(value)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
         .tip(help)
+        .help(help == nil ? value : "")
     }
 
     private var spec: String {
+        if server.agentOnly {
+            let parts = [server.meta(address: nil), project.name].filter { !$0.isEmpty && $0 != "Waiting for the agent" }
+            return parts.joined(separator: " · ")
+        }
         let type = server.serverType
         let cpu = type.cpuType == "dedicated" ? "dedicated vCPU" : "vCPU"
         return "\(type.name.uppercased()) · \(Int(type.cores)) \(cpu) · \(Int(type.memory)) GB · \(Int(type.disk)) GB · \(Format.place(server.location))"
     }
 
     private var statusColor: Color {
-        switch server.status {
+        if server.agentOnly { return agentAnswering ? Theme.green : hasAgent ? Theme.orange : Theme.off }
+        return switch server.status {
         case .running: Theme.green
         case .off: Theme.off
         default: Theme.orange
@@ -725,7 +804,7 @@ struct ServerDetailView: View {
         guard let since = stateSince else { return nil }
         let date = since.date.formatted(date: .abbreviated, time: .shortened)
         let source = since.fromAction
-            ? "Counted from the last start, stop or restart made through Hetzner."
+            ? "Counted from the last start, stop or restart made through \(project.provider.name)."
             : "Counted from when the server was created. Restarts from inside the OS are not visible to the API."
         return "\(statusName) for \(Format.exactDuration(since: since.date)). Since \(date). \(source)"
     }
@@ -775,6 +854,18 @@ struct ServerDetailView: View {
     }
 
     private func loadMetrics() async {
+        if server.agentOnly {
+            let now = Date.now
+            let since = now.addingTimeInterval(-range.seconds)
+            let history = hasAgent ? await monitor.agents.history(project.id, server.id, since: since) : nil
+            guard !Task.isCancelled else { return }
+            let samples = (history?.samples ?? []).filter { $0.t >= since }
+            memory = samples.map { MetricPoint(time: $0.t, value: $0.memory * 100) }
+            metrics = history?.metrics(cores: server.serverType.cores, from: since, to: now)
+                ?? ServerMetrics(start: since, end: now, step: 0, series: [:])
+            failed = false
+            return
+        }
         async let agentMemory: Void = loadMemory()
         do {
             let loaded = try await poller.history(server: server.id, range: range)
@@ -806,11 +897,6 @@ struct ServerDetailView: View {
         monitor.settings.value.alertSettings(for: project).rule(.sustainedCPU, server: server.id)?.threshold
     }
 
-    private var consoleURL: URL {
-        guard let id = project.consoleID else { return URL(string: "https://console.hetzner.com/projects")! }
-        return URL(string: "https://console.hetzner.com/projects/\(id)/servers/\(server.id)/overview")!
-    }
-
     private var ipv6: String? {
         guard let network = server.publicNet.ipv6?.ip else { return nil }
         return network.hasSuffix("::/64") ? network.replacingOccurrences(of: "::/64", with: "::1") : network
@@ -818,32 +904,38 @@ struct ServerDetailView: View {
 
     private var quickActions: some View {
         let ipv4 = server.publicNet.ipv4?.ip
+        let address = server.agentOnly ? monitor.agents.link(project.id, server.id)?.endpoint.host : ipv4
         let user = project.sshUser.isEmpty ? "root" : project.sshUser
         return HStack(spacing: 8) {
-            QuickAction(title: "SSH", icon: "terminal", help: ipv4.map { "ssh \(user)@\($0)" } ?? "No public IPv4") {
-                if let ipv4, let url = URL(string: "ssh://\(user)@\(ipv4)") { NSWorkspace.shared.open(url) }
+            QuickAction(title: "SSH", icon: "terminal", help: address.map { "ssh \(user)@\($0)" } ?? "No address") {
+                if let address, let url = URL(string: "ssh://\(user)@\(address.contains(":") ? "[\(address)]" : address)") {
+                    NSWorkspace.shared.open(url)
+                }
             }
-            .disabled(ipv4 == nil)
-            QuickAction(title: copied == "IPv4" ? "Copied" : "IPv4", icon: "doc.on.doc", help: ipv4 ?? "No public IPv4") {
-                copy(ipv4, label: "IPv4")
+            .disabled(address == nil)
+            if server.agentOnly {
+                QuickAction(title: copied == "Address" ? "Copied" : "Copy IP", icon: "doc.on.doc", help: address ?? "No address") {
+                    copy(address, label: "Address")
+                }
+                .disabled(address == nil)
+            } else {
+                QuickAction(title: copied == "IPv4" ? "Copied" : "IPv4", icon: "doc.on.doc", help: ipv4 ?? "No public IPv4") {
+                    copy(ipv4, label: "IPv4")
+                }
+                .disabled(ipv4 == nil)
+                QuickAction(title: copied == "IPv6" ? "Copied" : "IPv6", icon: "doc.on.doc", help: ipv6 ?? "No public IPv6") {
+                    copy(ipv6, label: "IPv6")
+                }
+                .disabled(ipv6 == nil)
             }
-            .disabled(ipv4 == nil)
-            QuickAction(title: copied == "IPv6" ? "Copied" : "IPv6", icon: "doc.on.doc", help: ipv6 ?? "No public IPv6") {
-                copy(ipv6, label: "IPv6")
-            }
-            .disabled(ipv6 == nil)
             QuickAction(title: "Alerts", icon: alertMode == .off ? "bell.slash" : "bell.badge", help: "Alert settings for this server") {
                 monitor.settings.requestedPage = .project(project.id)
                 app.showSettings()
             }
-            QuickAction(
-                title: "Console",
-                icon: "arrow.up.right.square",
-                help: project.consoleID == nil
-                    ? "Opens your project list. Add the project's Console link in Settings to open this server directly."
-                    : "Open this server in the Hetzner Console"
-            ) {
-                NSWorkspace.shared.open(consoleURL)
+            ForEach(project.provider.serverLinks(server, project: project)) { link in
+                QuickAction(title: link.title, icon: link.icon, help: link.help) {
+                    NSWorkspace.shared.open(link.url)
+                }
             }
         }
     }
@@ -890,9 +982,9 @@ struct ServerDetailView: View {
                 try await monitor.power(action, server: server.id, project: project.id)
                 powerMessage = "\(action.title) sent. The status updates in a few seconds."
             } catch let error as HetznerError {
-                powerMessage = error.code.map { "Hetzner refused: \($0)." } ?? "Could not send \(action.title.lowercased())."
+                powerMessage = error.code.map { "\(project.provider.name) refused: \($0)." } ?? "Could not send \(action.title.lowercased())."
             } catch {
-                powerMessage = "Could not reach Hetzner."
+                powerMessage = "Could not reach \(project.provider.name)."
             }
             powering = false
             confirming = nil

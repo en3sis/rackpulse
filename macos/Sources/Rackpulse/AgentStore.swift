@@ -3,7 +3,7 @@ import HetznerKit
 import Observation
 
 enum AgentAddress: String, Codable, CaseIterable, Identifiable {
-    case publicIPv4, publicIPv6, privateNetwork, custom
+    case publicIPv4, publicIPv6, tailscale, privateNetwork, custom
 
     var id: String { rawValue }
 
@@ -11,6 +11,7 @@ enum AgentAddress: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .publicIPv4: "Public IPv4"
         case .publicIPv6: "Public IPv6"
+        case .tailscale: "Tailscale"
         case .privateNetwork: "Private network"
         case .custom: "Other address"
         }
@@ -22,6 +23,7 @@ enum AgentAddress: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .publicIPv4: server.publicNet.ipv4?.ip
         case .publicIPv6: server.publicNet.ipv6.map { $0.ip.replacingOccurrences(of: "::/64", with: "::1") }
+        case .tailscale: server.name
         case .privateNetwork: server.privateNet?.first?.ip
         case .custom: nil
         }
@@ -44,7 +46,7 @@ struct AgentLink: Codable, Hashable {
         case .publicIPv4: "the public IPv4 address, port \(endpoint.port)"
         case .publicIPv6: "the public IPv6 address, port \(endpoint.port)"
         case .privateNetwork: "the private network address, port \(endpoint.port)"
-        case .custom: endpoint.display
+        case .tailscale, .custom: endpoint.display
         }
     }
 }
@@ -75,7 +77,7 @@ enum AgentProblem: Equatable {
         case .agent(.invalidResponse):
             "The agent sent an answer Rackpulse does not understand. Update the agent."
         case .otherServer(let id):
-            "The agent at \(place) runs on another Hetzner server (ID \(id))."
+            "The agent at \(place) runs on another server (ID \(id))."
         case .noKey:
             "The pairing key is missing from the Keychain. Remove the agent and set it up again."
         }
@@ -93,8 +95,8 @@ struct AgentState {
 @MainActor
 @Observable
 final class AgentStore {
-    static let latestVersion = "0.1.1"
-    static let installURL = "https://rackpulse.app/agent/install.sh"
+    static let latestVersion = Bundle.main.object(forInfoDictionaryKey: "RackpulseAgentVersion") as? String ?? ""
+    static let installURL = "\(Flavor.agentURL)/install.sh"
     private static let linksKey = "agentLinks"
     private static let historyInterval: TimeInterval = 900
 
@@ -107,6 +109,7 @@ final class AgentStore {
     @ObservationIgnored private var clients: [String: AgentClient] = [:]
     @ObservationIgnored private var historyFetched: [String: Date] = [:]
     @ObservationIgnored private var pairing: Set<String> = []
+    @ObservationIgnored private var refreshing: Set<String> = []
     @ObservationIgnored private let uptimeURL: URL
 
     init() {
@@ -151,6 +154,15 @@ final class AgentStore {
         return Self.command(link: link, token: token)
     }
 
+    func installCommand(_ project: UUID, _ server: Int64, address: AgentAddress, host: String, port: Int) -> String? {
+        guard let token = token(project, server) else { return nil }
+        return Self.command(link: AgentLink(address: address, endpoint: AgentEndpoint(host: host, port: port)), token: token)
+    }
+
+    static func masked(_ command: String) -> String {
+        command.replacing(/rb1_[A-Za-z0-9_-]+/, with: "rb1_••••••••")
+    }
+
     func rotationCommand(_ project: UUID, _ server: Int64) -> String? {
         let key = Self.key(project, server)
         guard let link = links[key], link.isRotating, let token = token(Self.nextKey(key)) else { return nil }
@@ -164,7 +176,11 @@ final class AgentStore {
     private static func command(link: AgentLink, token: String) -> String {
         var command = " curl -fsSL \(installURL) | sudo sh -s -- --pair \(token)"
         if link.endpoint.port != AgentEndpoint.defaultPort { command += " --port \(link.endpoint.port)" }
-        if !link.address.isPublic, isIPAddress(link.endpoint.host) { command += " --listen \(link.endpoint.host)" }
+        if link.address == .tailscale {
+            command += " --listen tailscale"
+        } else if !link.address.isPublic, isIPAddress(link.endpoint.host) {
+            command += " --listen \(link.endpoint.host)"
+        }
         return command
     }
 
@@ -226,6 +242,17 @@ final class AgentStore {
         persist()
     }
 
+    func move(_ project: UUID, _ server: Int64, address: AgentAddress, host: String, port: Int) {
+        let key = Self.key(project, server)
+        guard links[key] != nil else { return }
+        links[key]?.address = address
+        links[key]?.endpoint = AgentEndpoint(host: host.trimmingCharacters(in: .whitespacesAndNewlines), port: port)
+        clients[key] = nil
+        states[key]?.problem = nil
+        states[key]?.failures = 0
+        persist()
+    }
+
     func pairAgain(_ project: UUID, _ server: Int64) {
         let key = Self.key(project, server)
         links[key]?.fingerprint = nil
@@ -249,6 +276,18 @@ final class AgentStore {
         saveUptime()
     }
 
+    @discardableResult
+    private func adoptTailscaleName(_ key: String, _ snapshot: AgentSnapshot) -> Bool {
+        guard let link = links[key], link.address == .tailscale,
+              let name = snapshot.host.tailscale?.name, !name.isEmpty,
+              !link.endpoint.host.contains("."), !link.endpoint.host.contains(":"),
+              link.endpoint.host.lowercased() != name.lowercased()
+        else { return false }
+        links[key]?.endpoint.host = name
+        clients[key] = nil
+        return true
+    }
+
     func tryPair(_ project: UUID, server: Int64) async {
         let key = Self.key(project, server)
         guard let link = links[key], !link.isPaired, !pairing.contains(key) else { return }
@@ -263,7 +302,7 @@ final class AgentStore {
             let result = try await AgentClient.pair(endpoint: link.endpoint, token: token, timeout: 5)
             let client = AgentClient(endpoint: link.endpoint, token: token, fingerprint: result.fingerprint)
             let snapshot = try await client.snapshot().normalized()
-            if let other = snapshot.host.serverID, other != server {
+            if server > 0, let other = snapshot.host.serverID, other != server {
                 fail(key, .otherServer(other))
                 return
             }
@@ -274,6 +313,7 @@ final class AgentStore {
             clients[key] = client
             states[key] = AgentState(snapshot: snapshot, seen: .now)
             historyFetched[key] = nil
+            adoptTailscaleName(key, snapshot)
             persist()
             await refreshHistory(key, client: client)
         } catch let error as AgentError {
@@ -327,10 +367,11 @@ final class AgentStore {
 
         for (key, id, result) in results {
             switch result {
-            case .success(let snapshot) where snapshot.host.serverID.map({ $0 != id }) ?? false:
+            case .success(let snapshot) where id > 0 && snapshot.host.serverID.map({ $0 != id }) ?? false:
                 fail(key, .otherServer(snapshot.host.serverID ?? 0))
             case .success(let snapshot):
                 states[key] = AgentState(snapshot: snapshot, seen: .now)
+                if adoptTailscaleName(key, snapshot) { persist() }
                 if links[key]?.version != snapshot.version {
                     links[key]?.version = snapshot.version
                     persist()
@@ -345,6 +386,27 @@ final class AgentStore {
             }
         }
         return reports
+    }
+
+    func refreshLive(_ project: UUID, _ server: Int64, history: Bool) async {
+        let key = Self.key(project, server)
+        guard let link = links[key], link.isPaired, !link.isRotating, !refreshing.contains(key),
+              let client = client(key, link: link)
+        else { return }
+        refreshing.insert(key)
+        defer { refreshing.remove(key) }
+        guard let snapshot = try? await client.snapshot().normalized(),
+              server < 0 || snapshot.host.serverID.map({ $0 == server }) ?? true,
+              links[key]?.endpoint == link.endpoint
+        else { return }
+        states[key] = AgentState(snapshot: snapshot, seen: .now)
+        if links[key]?.version != snapshot.version {
+            links[key]?.version = snapshot.version
+            persist()
+        }
+        if history, historyFetched[key].map({ Date.now.timeIntervalSince($0) > 60 }) ?? true {
+            await refreshHistory(key, client: client)
+        }
     }
 
     func history(_ project: UUID, _ server: Int64, since: Date) async -> AgentHistory? {
