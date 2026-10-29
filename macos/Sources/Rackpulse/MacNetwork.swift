@@ -14,6 +14,10 @@ enum MacNetwork {
         return false
     }
 
+    private static func text(_ buffer: [CChar]) -> String {
+        String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    }
+
     static func tailscaleIPv4() -> String? {
         var list: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&list) == 0, let first = list else { return nil }
@@ -24,7 +28,7 @@ enum MacNetwork {
             guard ip & 0xFFC0_0000 == 0x6440_0000 else { continue }
             var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
             getnameinfo(address, socklen_t(address.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST)
-            return String(cString: host)
+            return text(host)
         }
         return nil
     }
@@ -43,7 +47,7 @@ enum MacNetwork {
                 }
             }
             guard status == 0 else { return nil }
-            let name = String(cString: host).trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            let name = text(host).trimmingCharacters(in: CharacterSet(charactersIn: "."))
             let labels = name.split(separator: ".")
             guard labels.count >= 3, name.hasSuffix(".ts.net") else { return nil }
             return labels.dropFirst().joined(separator: ".")
