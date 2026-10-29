@@ -34,7 +34,7 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
         guard !reportsReadOnly else { return self }
         let disks = disks.map {
             Disk(mount: $0.mount, device: $0.device, fs: $0.fs, total: $0.total, used: $0.used, available: $0.available,
-                 inodesTotal: $0.inodesTotal, inodesUsed: $0.inodesUsed, readOnly: false)
+                 inodesTotal: $0.inodesTotal, inodesUsed: $0.inodesUsed, readOnly: false, kind: $0.kind, model: $0.model)
         }
         return AgentSnapshot(version: version, time: time, host: host, memory: memory, disks: disks, system: system, docker: docker, activity: activity)
     }
@@ -103,10 +103,12 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
         public let inodesTotal: Int64
         public let inodesUsed: Int64
         public let readOnly: Bool
+        public let kind: String?
+        public let model: String?
 
         public init(
             mount: String, device: String, fs: String, total: Int64, used: Int64, available: Int64,
-            inodesTotal: Int64 = 0, inodesUsed: Int64 = 0, readOnly: Bool = false
+            inodesTotal: Int64 = 0, inodesUsed: Int64 = 0, readOnly: Bool = false, kind: String? = nil, model: String? = nil
         ) {
             self.mount = mount
             self.device = device
@@ -117,6 +119,8 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
             self.inodesTotal = inodesTotal
             self.inodesUsed = inodesUsed
             self.readOnly = readOnly
+            self.kind = kind
+            self.model = model
         }
 
         public var id: String { device }

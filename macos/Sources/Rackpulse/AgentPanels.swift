@@ -151,6 +151,15 @@ struct AgentOverview: View {
             }
             if let snapshot = state?.snapshot {
                 tiles(snapshot)
+                let others = snapshot.disks.filter { $0.id != snapshot.systemDisk?.id && !$0.mount.hasPrefix("/boot") }
+                if !others.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(Array(others.enumerated()), id: \.element.id) { index, disk in
+                            StorageRow(disk: disk, divider: index < others.count - 1)
+                        }
+                    }
+                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
+                }
                 ForEach(Array(issues(snapshot).enumerated()), id: \.offset) { _, issue in issue }
             } else if state?.problem == nil {
                 HStack(spacing: 8) {
@@ -168,15 +177,16 @@ struct AgentOverview: View {
 
     private func tiles(_ snapshot: AgentSnapshot) -> some View {
         let memory = snapshot.memory
-        let fullest = snapshot.disks.max { $0.usedFraction < $1.usedFraction }
+        let system = snapshot.systemDisk
         return HStack(spacing: 8) {
             tile("Memory", icon: "memorychip", value: Format.percent(memory.usedFraction * 100),
                  detail: "\(Format.memory(memory.used)) of \(Format.memory(memory.total))", fraction: memory.usedFraction)
-            if let fullest {
-                tile(fullest.mount == "/" ? "Disk" : "Disk \(fullest.mount)", icon: "internaldrive",
-                     value: Format.percent(fullest.usedFraction * 100),
-                     detail: "\(Format.size(fullest.used)) of \(Format.size(fullest.used + fullest.available))",
-                     fraction: fullest.usedFraction)
+            if let system {
+                tile(system.kindName ?? "Disk", icon: system.icon,
+                     value: Format.percent(system.usedFraction * 100),
+                     detail: "\(Format.size(system.used)) of \(Format.size(system.used + system.available))",
+                     fraction: system.usedFraction)
+                    .help(system.summary)
             }
             tile("Up", icon: "power", value: Format.compactDuration(since: snapshot.host.bootTime),
                  detail: snapshot.host.load.first.map { "load \(String(format: "%.2f", $0))" } ?? "", fraction: nil)
@@ -777,5 +787,86 @@ struct InfoRow: View {
         .overlay(alignment: .top) {
             Theme.divider.frame(height: 1).padding(.leading, 44)
         }
+    }
+}
+
+struct StorageRow: View {
+    let disk: AgentSnapshot.Disk
+    var divider = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Image(systemName: disk.icon)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.secondary)
+                    .frame(width: 16)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Text(disk.mount).font(.system(size: 12, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+                        if disk.readOnly {
+                            Text("read-only").font(.system(size: 11)).foregroundStyle(Theme.red)
+                        }
+                    }
+                    Text(disk.details).font(.system(size: 11)).foregroundStyle(Theme.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Text("\(Format.size(disk.used)) of \(Format.size(disk.used + disk.available))")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(disk.usedFraction >= 0.9 ? Theme.orange : Theme.text)
+            }
+            UsageBar(fraction: disk.usedFraction, color: UsageBar.color(disk.usedFraction, warn: disk.readOnly))
+                .padding(.leading, 24)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) {
+            if divider { Theme.divider.frame(height: 1).padding(.horizontal, 10) }
+        }
+        .help(disk.summary)
+    }
+}
+
+extension AgentSnapshot {
+    var systemDisk: Disk? {
+        disks.first { $0.mount == "/" } ?? disks.max { $0.total < $1.total }
+    }
+}
+
+extension AgentSnapshot.Disk {
+    var kindName: String? {
+        switch kind {
+        case "sd": "SD card"
+        case "emmc": "eMMC"
+        case "nvme": "NVMe SSD"
+        case "usb": "USB drive"
+        case "ssd": "SSD"
+        case "hdd": "Hard disk"
+        case "virtual": "Virtual disk"
+        case "ram": "RAM disk"
+        case "image": "Disk image"
+        case "raid": "RAID"
+        case "mapped": "Mapped volume"
+        default: nil
+        }
+    }
+
+    var icon: String {
+        switch kind {
+        case "sd": "sdcard"
+        case "emmc", "ram": "memorychip"
+        case "usb": "externaldrive"
+        case "raid": "square.stack.3d.up"
+        case "image": "opticaldisc"
+        default: "internaldrive"
+        }
+    }
+
+    var details: String {
+        [kindName, model, fs].compactMap { $0?.nonEmpty }.joined(separator: " · ")
+    }
+
+    var summary: String {
+        [mount, details, device].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }

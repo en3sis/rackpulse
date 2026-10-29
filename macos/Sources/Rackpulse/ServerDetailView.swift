@@ -633,8 +633,9 @@ struct ServerDetailView: View {
         let matched = Set([root?.id].compactMap { $0 } + volumeMounts.values.map(\.id))
         let others = mounts.filter { !matched.contains($0.id) }
         return VStack(spacing: 0) {
-            diskRow(icon: "internaldrive", name: server.agentOnly ? "Root" : "Local disk",
-                    meta: server.agentOnly ? (root.map { "\($0.fs) · \($0.device)" } ?? "/") : "Included with \(server.serverType.name.uppercased())",
+            diskRow(icon: server.agentOnly ? root?.icon ?? "internaldrive" : "internaldrive",
+                    name: server.agentOnly ? "System disk" : "Local disk",
+                    meta: server.agentOnly ? (root.map { "/ · \($0.details)" } ?? "/") : "Included with \(server.serverType.name.uppercased())",
                     size: local, usage: root, divider: !volumes.isEmpty || !others.isEmpty)
             ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
                 diskRow(
@@ -647,7 +648,7 @@ struct ServerDetailView: View {
                 )
             }
             ForEach(Array(others.enumerated()), id: \.element.id) { index, disk in
-                diskRow(icon: "folder", name: disk.mount, meta: "\(disk.fs) · \(disk.device)",
+                diskRow(icon: disk.icon, name: disk.mount, meta: [disk.details, disk.device].filter { !$0.isEmpty }.joined(separator: " · "),
                         size: nil, usage: disk, divider: index < others.count - 1)
             }
         }

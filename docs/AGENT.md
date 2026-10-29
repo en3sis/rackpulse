@@ -148,7 +148,7 @@ Header `Authorization: Bearer <key>`. The current state, collected every 60 seco
 
 - `serverID` is the Hetzner server ID from the metadata service, or `null`.
 - `tailscale` is left out when Tailscale does not run on the server. Otherwise `name` is the MagicDNS name saved at install and `ip` the current address of `tailscale0`. Rackpulse uses them to keep reaching the server over Tailscale.
-- `disks` lists block-device file systems, one entry per device. `readOnly` is the file system's own state, so it is `true` only when the file system is mounted read-only on the server. `inodesTotal` and `inodesUsed` are 0 on file systems without fixed inodes, such as btrfs.
+- `disks` lists block-device file systems, one entry per device. `readOnly` is the file system's own state, so it is `true` only when the file system is mounted read-only on the server. `inodesTotal` and `inodesUsed` are 0 on file systems without fixed inodes, such as btrfs. `kind` is the device type: `sd`, `emmc`, `nvme`, `usb`, `ssd`, `hdd`, `virtual`, `ram`, `image`, `raid` or `mapped`. `model` is the device's model name when the kernel reports one. Older agents leave both out.
 - `docker` is `null` when Docker is not installed. `error` is set when the socket exists but cannot be read.
 - `project` is the Docker Compose project label, or `null`.
 - `state` is Docker's state: `running`, `restarting`, `paused`, `exited`, `created`, `dead`.
