@@ -43,6 +43,12 @@ struct AgentTests {
         #expect(metrics.totalIOPS.map(\.value) == [8])
         #expect(metrics.points(MetricSeries.networkBandwidthOut).map(\.value) == [1200])
 
+        let start = Date(timeIntervalSince1970: 1761479000)
+        let end = Date(timeIntervalSince1970: 1761480100)
+        let ranged = try #require(history.metrics(cores: 4, from: start, to: end))
+        #expect(ranged.start == start && ranged.end == end)
+        #expect(history.metrics(cores: 4, from: Date(timeIntervalSince1970: 1761480030)) == nil)
+
         let old = try AgentJSON.decoder().decode(AgentHistory.self, from: Data(
             #"{"coverageStart":1761400000,"step":60,"samples":[{"t":1761480000,"memory":0.5,"swap":0,"disk":0.4,"load":0.2}]}"#.utf8
         ))

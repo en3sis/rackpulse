@@ -8,8 +8,10 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
     public let disks: [Disk]
     public let system: System
     public let docker: Docker?
+    public let activity: Activity?
 
-    public init(version: String, time: Date, host: Host, memory: Memory, disks: [Disk], system: System, docker: Docker?) {
+    public init(version: String, time: Date, host: Host, memory: Memory, disks: [Disk], system: System, docker: Docker?,
+                activity: Activity? = nil) {
         self.version = version
         self.time = time
         self.host = host
@@ -17,6 +19,11 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
         self.disks = disks
         self.system = system
         self.docker = docker
+        self.activity = activity
+    }
+
+    public struct Activity: Sendable, Hashable, Codable {
+        public let cpu: Double
     }
 
     public var reportsReadOnly: Bool {
@@ -29,7 +36,7 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
             Disk(mount: $0.mount, device: $0.device, fs: $0.fs, total: $0.total, used: $0.used, available: $0.available,
                  inodesTotal: $0.inodesTotal, inodesUsed: $0.inodesUsed, readOnly: false)
         }
-        return AgentSnapshot(version: version, time: time, host: host, memory: memory, disks: disks, system: system, docker: docker)
+        return AgentSnapshot(version: version, time: time, host: host, memory: memory, disks: disks, system: system, docker: docker, activity: activity)
     }
 
     public struct Host: Sendable, Hashable, Codable {
@@ -348,13 +355,14 @@ public struct AgentHistory: Sendable, Hashable, Codable {
         samples.contains { $0.cpu != nil }
     }
 
-    public func metrics(cores: Double) -> ServerMetrics? {
-        guard hasActivity, let first = samples.first, let last = samples.last else { return nil }
+    public func metrics(cores: Double, from start: Date? = nil, to end: Date? = nil) -> ServerMetrics? {
+        let samples = start.map { start in self.samples.filter { $0.t >= start } } ?? self.samples
+        guard samples.contains(where: { $0.cpu != nil }), let first = samples.first, let last = samples.last else { return nil }
         func series(_ value: (Sample) -> Double?) -> [MetricPoint] {
             samples.compactMap { sample in value(sample).map { MetricPoint(time: sample.t, value: $0) } }
         }
         let scale = max(cores, 1)
-        return ServerMetrics(start: first.t, end: last.t, step: Double(step), series: [
+        return ServerMetrics(start: start ?? first.t, end: max(end ?? last.t, last.t), step: Double(step), series: [
             MetricSeries.cpu: series { $0.cpu.map { $0 * scale } },
             MetricSeries.diskIOPSRead: series(\.diskReadIOPS),
             MetricSeries.diskIOPSWrite: series(\.diskWriteIOPS),

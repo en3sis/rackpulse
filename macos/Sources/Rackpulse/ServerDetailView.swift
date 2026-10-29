@@ -409,7 +409,10 @@ struct ServerDetailView: View {
     }
 
     private var showsActivity: Bool {
-        !server.agentOnly || metrics.map { !$0.points(MetricSeries.cpu).isEmpty } ?? false
+        guard server.agentOnly else { return true }
+        guard hasAgent else { return false }
+        if snapshot?.activity != nil { return true }
+        return metrics.map { !$0.points(MetricSeries.cpu).isEmpty } ?? false
     }
 
     private var hasAgent: Bool {
@@ -483,7 +486,8 @@ struct ServerDetailView: View {
 
     private var domain: ClosedRange<Date> {
         let end = metrics?.end ?? .now
-        let start = max(metrics?.start ?? end.addingTimeInterval(-range.seconds), server.created)
+        let first = metrics?.start ?? end.addingTimeInterval(-range.seconds)
+        let start = server.agentOnly ? first : max(first, server.created)
         return start < end ? start...end : end.addingTimeInterval(-60)...end
     }
 
@@ -493,7 +497,7 @@ struct ServerDetailView: View {
     }
 
     private var newerThanRangeNote: String? {
-        guard let start = metrics?.start, server.created > start else { return nil }
+        guard !server.agentOnly, let start = metrics?.start, server.created > start else { return nil }
         let created = server.created.formatted(.dateTime.month(.abbreviated).day())
         return "Created \(created), so this shows \(Format.compactDuration(since: server.created))."
     }
@@ -840,11 +844,14 @@ struct ServerDetailView: View {
 
     private func loadMetrics() async {
         if server.agentOnly {
-            let since = Date.now.addingTimeInterval(-range.seconds)
+            let now = Date.now
+            let since = now.addingTimeInterval(-range.seconds)
             let history = hasAgent ? await monitor.agents.history(project.id, server.id, since: since) : nil
+            guard !Task.isCancelled else { return }
             let samples = (history?.samples ?? []).filter { $0.t >= since }
             memory = samples.map { MetricPoint(time: $0.t, value: $0.memory * 100) }
-            metrics = history?.metrics(cores: server.serverType.cores) ?? ServerMetrics(start: since, end: .now, step: 0, series: [:])
+            metrics = history?.metrics(cores: server.serverType.cores, from: since, to: now)
+                ?? ServerMetrics(start: since, end: now, step: 0, series: [:])
             failed = false
             return
         }
