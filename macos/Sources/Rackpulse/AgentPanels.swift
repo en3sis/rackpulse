@@ -22,6 +22,7 @@ struct AgentNotice: View {
     }
 
     let kind: Kind
+    var title: String?
     let text: String
     var action: (title: String, run: () -> Void)?
     var copy: String?
@@ -31,7 +32,18 @@ struct AgentNotice: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: kind.icon).font(.system(size: 11)).foregroundStyle(kind.color)
-            Text(text).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 6) {
+                if let title {
+                    Text(title).font(.system(size: 12, weight: .semibold))
+                }
+                Text(text)
+                    .font(.system(size: 12))
+                    .foregroundStyle(title == nil ? Color.primary : Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let copy {
+                    command(copy)
+                }
+            }
             Spacer(minLength: 0)
             if let action {
                 Button(action.title, action: action.run)
@@ -39,25 +51,37 @@ struct AgentNotice: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.accentColor)
             }
-            if let copy {
-                Button(copied ? "Copied" : "Copy command") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(copy, forType: .string)
-                    copied = true
-                    Task {
-                        try? await Task.sleep(for: .seconds(1.5))
-                        copied = false
-                    }
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(copied ? Theme.green : Color.accentColor)
-                .help(copy)
-            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(kind.color.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func command(_ value: String) -> some View {
+        HStack(spacing: 8) {
+            Text(value.trimmingCharacters(in: .whitespaces))
+                .font(.system(size: 11, design: .monospaced))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+            Spacer(minLength: 0)
+            Button(copied ? "Copied" : "Copy") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(value, forType: .string)
+                copied = true
+                Task {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    copied = false
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(copied ? Theme.green : Color.accentColor)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 6))
+        .help(value)
     }
 }
 
@@ -79,7 +103,8 @@ struct AgentOverview: View {
             if store.needsUpdate(project.id, server.id) {
                 AgentNotice(
                     kind: .info,
-                    text: "Agent \(AgentStore.latestVersion) is available. Run the update command on the server as root. It keeps the key and settings.",
+                    title: "Agent update available",
+                    text: "Version \(AgentStore.latestVersion). Run this on the server as root. It keeps the key and settings.",
                     copy: AgentStore.updateCommand
                 )
             }
