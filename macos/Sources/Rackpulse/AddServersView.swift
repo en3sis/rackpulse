@@ -57,7 +57,7 @@ struct OnboardingView: View {
         .padding(18)
     }
 
-    private static let upcoming = ["DigitalOcean", "Vultr", "Akamai Linode"]
+    private static let upcoming = ["AWS", "DigitalOcean", "Railway"]
 
     private var providers: some View {
         VStack(alignment: .leading, spacing: 6) {
