@@ -56,11 +56,10 @@ struct AgentNotice: View {
     }
 
     private func command(_ value: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(value.trimmingCharacters(in: .whitespaces))
                 .font(.system(size: 11, design: .monospaced))
-                .lineLimit(1)
-                .truncationMode(.middle)
+                .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
             Spacer(minLength: 0)
             Button(copied == value ? "Copied" : "Copy") {
@@ -176,7 +175,7 @@ struct AgentOverview: View {
             result.append(AgentNotice(
                 kind: .problem,
                 title: "\(unit) failed",
-                text: "Run these on the server: the first shows why it failed, the second clears the failure once it is fixed.",
+                text: "Run on the server: status shows why it failed, reset-failed clears it once fixed.",
                 commands: ["sudo systemctl status \(unit)", "sudo systemctl reset-failed \(unit)"]
             ))
         }
