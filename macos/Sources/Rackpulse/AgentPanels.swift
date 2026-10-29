@@ -125,54 +125,78 @@ struct AgentNotice: View {
 }
 
 struct AgentOverview: View {
+    enum Part { case notices, stats }
+
     let server: Server
     let project: Project
     let monitor: Monitor
+    var part: Part = .notices
     let openSetup: () -> Void
     let openDocker: () -> Void
 
     var body: some View {
         let store = monitor.agents
-        let link = store.link(project.id, server.id)
         let state = store.state(project.id, server.id)
-        let key = AgentStore.key(project.id, server.id)
         VStack(spacing: 8) {
-            if let problem = state?.problem, let link {
-                AgentNotice(kind: .warning, text: problem.text(link), action: ("Help", openSetup), collapseKey: "\(key)|problem")
-            }
-            if store.needsUpdate(project.id, server.id) {
-                AgentNotice(
-                    kind: .info,
-                    title: "Agent update available",
-                    text: "Version \(AgentStore.latestVersion). Run this on the server as root. It keeps the key and settings.",
-                    commands: [AgentStore.updateCommand],
-                    collapseKey: "\(key)|update|\(AgentStore.latestVersion)"
-                )
-            }
-            if let snapshot = state?.snapshot {
-                tiles(snapshot)
-                let others = snapshot.disks.filter { $0.id != snapshot.systemDisk?.id && !$0.mount.hasPrefix("/boot") }
-                if !others.isEmpty {
-                    VStack(spacing: 0) {
-                        ForEach(Array(others.enumerated()), id: \.element.id) { index, disk in
-                            StorageRow(disk: disk, divider: index < others.count - 1)
-                        }
-                    }
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
-                }
-                ForEach(Array(issues(snapshot).enumerated()), id: \.offset) { _, issue in issue }
-            } else if state?.problem == nil {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Connecting to the agent…").font(.system(size: 12)).foregroundStyle(Theme.secondary)
-                    Spacer(minLength: 0)
-                }
-                .padding(10)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
+            switch part {
+            case .notices: notices(state)
+            case .stats: stats(state)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 12)
+        .padding(.top, part == .stats || hasNotices(state) ? 12 : 0)
+    }
+
+    private func hasNotices(_ state: AgentState?) -> Bool {
+        let store = monitor.agents
+        if state?.problem != nil && store.link(project.id, server.id) != nil { return true }
+        if store.needsUpdate(project.id, server.id) { return true }
+        return state?.snapshot.map { !issues($0).isEmpty } ?? false
+    }
+
+    @ViewBuilder
+    private func notices(_ state: AgentState?) -> some View {
+        let store = monitor.agents
+        let key = AgentStore.key(project.id, server.id)
+        if let problem = state?.problem, let link = store.link(project.id, server.id) {
+            AgentNotice(kind: .warning, text: problem.text(link), action: ("Help", openSetup), collapseKey: "\(key)|problem")
+        }
+        if store.needsUpdate(project.id, server.id) {
+            AgentNotice(
+                kind: .info,
+                title: "Agent update available",
+                text: "Version \(AgentStore.latestVersion). Run this on the server as root. It keeps the key and settings.",
+                commands: [AgentStore.updateCommand],
+                collapseKey: "\(key)|update|\(AgentStore.latestVersion)"
+            )
+        }
+        if let snapshot = state?.snapshot {
+            ForEach(Array(issues(snapshot).enumerated()), id: \.offset) { _, issue in issue }
+        }
+    }
+
+    @ViewBuilder
+    private func stats(_ state: AgentState?) -> some View {
+        if let snapshot = state?.snapshot {
+            tiles(snapshot)
+            let others = snapshot.disks.filter { $0.id != snapshot.systemDisk?.id && !$0.mount.hasPrefix("/boot") }
+            if !others.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(others.enumerated()), id: \.element.id) { index, disk in
+                        StorageRow(disk: disk, divider: index < others.count - 1)
+                    }
+                }
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
+            }
+        } else if state?.problem == nil {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Connecting to the agent…").font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
+        }
     }
 
     private func tiles(_ snapshot: AgentSnapshot) -> some View {

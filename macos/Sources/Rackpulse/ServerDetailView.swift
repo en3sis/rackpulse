@@ -187,6 +187,10 @@ struct ServerDetailView: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
 
+        if hasAgent {
+            AgentOverview(server: server, project: project, monitor: monitor, part: .stats, openSetup: openAgent, openDocker: { tab = .docker })
+                .padding(.top, 4)
+        }
         UptimeCard(timeline: timeline, hasAgent: hasAgent, agentOnly: server.agentOnly)
             .padding(.horizontal, 16)
             .padding(.top, 16)
