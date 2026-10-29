@@ -12,6 +12,7 @@
 - Agent data shows right after Rackpulse starts, instead of after the first check interval.
 - While a server's page is open, its agent is read every 5 seconds.
 - Add servers that run only the agent, with no provider account: home lab, bare metal or any cloud. They live in their own projects. Power controls, traffic and the Console are not available for them, and they count in Costs only with a price you enter.
+- Adding servers starts with a choice of provider. Hetzner Cloud is available, and AWS, DigitalOcean and Railway are listed as coming soon.
 - On a Mac with Tailscale, the agent setup finds the server by its name in your tailnet, so you no longer type an address. A server that is not paired yet can be removed from its setup page.
 - Servers with only the agent get the same CPU, disk I/O and network charts as cloud servers, and the CPU and disk I/O alerts. Rows for these servers show the same columns as the others, with the OS and address in tooltips.
 - An agent server's Disk tile shows its system disk, named by type (SD card, eMMC, NVMe, USB drive and others). Other drives and volumes are listed below it with their usage.
