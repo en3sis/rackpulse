@@ -133,15 +133,7 @@ struct FleetHeadline: View {
                         Text(headline(servers: servers.count, down: down, alerts: alerts))
                             .font(.system(size: 13, weight: .semibold))
                             .lineLimit(1)
-                        Spacer(minLength: 8)
-                        HStack(spacing: 10) {
-                            if let cpu = averageCPU(loaded) {
-                                figure("cpu", Format.percent(cpu), help: "Average CPU across these servers right now")
-                            }
-                            if let cost = cost {
-                                figure("banknote", cost, help: "Estimated cost this month")
-                            }
-                        }
+                        Spacer(minLength: 0)
                     }
                     if !items.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
@@ -218,32 +210,6 @@ struct FleetHeadline: View {
             if alerts > 0 { parts.append("\(alerts) alert\(alerts == 1 ? "" : "s")") }
         }
         return parts.joined(separator: " · ")
-    }
-
-    private func figure(_ icon: String, _ value: String, help: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondary)
-            Text(value).font(.system(size: 12, weight: .semibold)).rolling(value)
-        }
-        .help(help)
-    }
-
-    private func averageCPU(_ pollers: [ProjectPoller]) -> Double? {
-        let values = pollers.flatMap { poller in
-            poller.data.servers.compactMap { poller.data.metrics[$0.id]?.cpuPercent(cores: $0.serverType.cores).last?.value }
-        }
-        return values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
-    }
-
-    private var cost: String? {
-        let currency = monitor.pricing?.currency ?? "EUR"
-        let amount: Decimal?
-        if store.scope.count > 1 {
-            amount = monitor.allProjectsCost?.monthToDate
-        } else {
-            amount = store.scope.first.flatMap { monitor.costReport(for: $0.id)?.monthToDate }
-        }
-        return amount.map { $0.formatted(.currency(code: currency).precision(.fractionLength(0))) }
     }
 }
 
