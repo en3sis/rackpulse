@@ -123,53 +123,55 @@ struct FleetHeadline: View {
             let worst = items.map(\.alert.severity).max()
             let healthy = down == 0 && alerts == 0
             let color = healthy ? (notices > 0 ? Theme.info : Theme.green) : worst.map(Theme.color) ?? Theme.orange
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: healthy ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(healthy ? Theme.green : color)
-                        .symbolEffect(.bounce, value: healthy)
-                    Text(headline(servers: servers.count, down: down, alerts: alerts))
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    HStack(spacing: 10) {
-                        if let cpu = averageCPU(loaded) {
-                            figure("cpu", Format.percent(cpu), help: "Average CPU across these servers right now")
-                        }
-                        if let cost = cost {
-                            figure("banknote", cost, help: "Estimated cost this month")
-                        }
-                    }
-                }
-                if !items.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(expanded ? items : Array(items.prefix(Self.collapsedCount))) { item in
-                            row(item)
-                        }
-                        if items.count > Self.collapsedCount {
-                            Button(expanded ? "Show less" : "Show \(items.count - Self.collapsedCount) more") {
-                                var transaction = Transaction(animation: nil)
-                                transaction.disablesAnimations = true
-                                withTransaction(transaction) { expanded.toggle() }
+            if !healthy || !items.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: healthy ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(healthy ? Theme.green : color)
+                            .symbolEffect(.bounce, value: healthy)
+                        Text(headline(servers: servers.count, down: down, alerts: alerts))
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        HStack(spacing: 10) {
+                            if let cpu = averageCPU(loaded) {
+                                figure("cpu", Format.percent(cpu), help: "Average CPU across these servers right now")
                             }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Color.accentColor)
-                            .padding(.leading, 23)
+                            if let cost = cost {
+                                figure("banknote", cost, help: "Estimated cost this month")
+                            }
                         }
                     }
-                    .transaction { $0.animation = nil }
+                    if !items.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(expanded ? items : Array(items.prefix(Self.collapsedCount))) { item in
+                                row(item)
+                            }
+                            if items.count > Self.collapsedCount {
+                                Button(expanded ? "Show less" : "Show \(items.count - Self.collapsedCount) more") {
+                                    var transaction = Transaction(animation: nil)
+                                    transaction.disablesAnimations = true
+                                    withTransaction(transaction) { expanded.toggle() }
+                                }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color.accentColor)
+                                .padding(.leading, 23)
+                            }
+                        }
+                        .transaction { $0.animation = nil }
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(color.opacity(healthy ? 0.08 : 0.1), in: RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    if !healthy { RoundedRectangle(cornerRadius: 10).stroke(color.opacity(0.3)) }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(color.opacity(healthy ? 0.08 : 0.1), in: RoundedRectangle(cornerRadius: 10))
-            .overlay {
-                if !healthy { RoundedRectangle(cornerRadius: 10).stroke(color.opacity(0.3)) }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
         }
     }
 
