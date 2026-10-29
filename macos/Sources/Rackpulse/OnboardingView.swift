@@ -18,7 +18,7 @@ struct CloudProjectForm: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                FormTitle(text: "Add a cloud project", back: back)
+                FormTitle(text: "Add a Hetzner Cloud project", back: back)
                 HStack(spacing: 6) {
                     Text("Provider").foregroundStyle(Theme.secondary)
                     Text("Hetzner Cloud").fontWeight(.medium)

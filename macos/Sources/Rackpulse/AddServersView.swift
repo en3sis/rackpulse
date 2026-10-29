@@ -37,7 +37,9 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Add servers").font(.system(size: 15, weight: .semibold))
             option(.cloud, icon: "cloud", title: "Cloud provider",
-                   text: "Connect a Hetzner Cloud project with an API token. Rackpulse lists its servers and shows costs, traffic and power controls.")
+                   text: "Connect a cloud project with an API token. Rackpulse lists its servers and shows costs, traffic and power controls.") {
+                providers
+            }
             option(.agent, icon: "cpu", title: "Server with the agent",
                    text: "Any Linux server: home lab, bare metal or another cloud. Install the Rackpulse agent and pair it by address. No provider account.")
             HStack {
@@ -55,8 +57,40 @@ struct OnboardingView: View {
         .padding(18)
     }
 
-    private func option(_ value: Step, icon: String, title: String, text: String) -> some View {
+    private static let upcoming = ["DigitalOcean", "Vultr", "Akamai Linode"]
+
+    private var providers: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            providerRow("Hetzner Cloud", available: true)
+            ForEach(Self.upcoming, id: \.self) { providerRow($0, available: false) }
+        }
+        .padding(.top, 4)
+    }
+
+    private func providerRow(_ name: String, available: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: available ? "checkmark.circle.fill" : "circle.dashed")
+                .font(.system(size: 12))
+                .foregroundStyle(available ? Color.accentColor : Theme.secondary)
+            Text(name)
+                .font(.system(size: 12, weight: available ? .semibold : .regular))
+                .foregroundStyle(available ? Theme.text : Theme.secondary)
+            Spacer(minLength: 0)
+            if !available {
+                Text("Coming soon")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Theme.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Theme.card, in: Capsule())
+            }
+        }
+    }
+
+    private func option(_ value: Step, icon: String, title: String, text: String,
+                        @ViewBuilder extra: () -> some View = { EmptyView() }) -> some View {
         let selected = choice == value
+        let extra = extra()
         return Button { choice = value } label: {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: icon)
@@ -69,6 +103,7 @@ struct OnboardingView: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    if selected { extra }
                 }
                 Spacer(minLength: 0)
                 Image(systemName: selected ? "largecircle.fill.circle" : "circle")
