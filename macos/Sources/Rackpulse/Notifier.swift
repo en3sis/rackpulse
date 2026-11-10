@@ -46,9 +46,12 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             .failedService: "web-1: nginx.service failed",
             .rebootRequired: "web-1 needs a reboot to finish updates",
             .agentUnreachable: "web-1 is running, but its agent does not answer",
+            .securityUpdates: "web-1: 14 security updates waiting for 3 days",
+            .vulnerability: "web-1: 2 new vulnerabilities",
+            .hardening: "web-1: SSH accepts passwords",
         ]
         let severity: Severity = switch kind {
-        case .serverDown, .storageBox: .critical
+        case .serverDown, .storageBox, .vulnerability: .critical
         case .budget, .unexpectedChange, .rebootRequired: .info
         default: .warning
         }
@@ -56,7 +59,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         post(OutgoingNotification(
             id: AlertCenter.notificationID(project: project.id, alert: id), project: project.id.uuidString, kind: kind, snoozeID: id,
             heading: "web-1", title: titles[kind] ?? kind.title, subtitle: project.name,
-            body: "Started \(Date.now.formatted(date: .omitted, time: .shortened)). Rule: \(kind.title).",
+            body: kind == .vulnerability
+                ? "CVE-2025-32463 in sudo (critical, known to be exploited)\nCVE-2024-6119 in openssl (high)"
+                : "Started \(Date.now.formatted(date: .omitted, time: .shortened)). Rule: \(kind.title).",
             severity: severity, created: .now
         ))
     }
@@ -119,6 +124,9 @@ extension RuleKind {
         case .failedService: "Failed service"
         case .rebootRequired: "Reboot required"
         case .agentUnreachable: "Agent not answering"
+        case .securityUpdates: "Security updates"
+        case .vulnerability: "Vulnerabilities"
+        case .hardening: "Hardening"
         }
     }
 
@@ -137,6 +145,9 @@ extension RuleKind {
         case .failedService: "A systemd service on the server is in the failed state."
         case .rebootRequired: "The server installed updates that need a reboot."
         case .agentUnreachable: "The agent stops answering while the provider reports the server as running, so it may be frozen or out of memory. For servers with only the agent, this is the server down alert."
+        case .securityUpdates: "Security updates from the package manager stay uninstalled for the whole period."
+        case .vulnerability: "An installed package has a known vulnerability with a fix, is known to be exploited, or is malware. Needs online checks in Security settings."
+        case .hardening: "A hardening check fails, for example SSH accepts passwords or a database port is open to the internet."
         }
     }
 }

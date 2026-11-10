@@ -1,0 +1,62 @@
+Package: libssl3t64
+Status: install ok installed
+Priority: optional
+Section: libs
+Installed-Size: 6000
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Architecture: arm64
+Multi-Arch: same
+Source: openssl
+Version: 3.0.13-0ubuntu3.4
+Depends: libc6 (>= 2.34)
+Description: Secure Sockets Layer toolkit, shared libraries
+ This package is part of the OpenSSL project's implementation of the SSL
+ and TLS cryptographic protocols for secure communication over the
+ Internet.
+
+Package: liblzma5
+Status: install ok installed
+Architecture: arm64
+Source: xz-utils (5.6.1+really5.4.5-1ubuntu0.3)
+Version: 5.6.1+really5.4.5-1ubuntu0.3
+Description: XZ-format compression library
+
+Package: bash
+Status: hold ok installed
+Architecture: arm64
+Version: 5.2.21-2ubuntu4
+Description: GNU Bourne Again SHell
+
+Package: oldpkg
+Status: deinstall ok config-files
+Architecture: arm64
+Version: 1.0-1
+Description: removed but configuration remains
+
+Package: halfpkg
+Status: install ok half-installed
+Architecture: arm64
+Version: 2.0-1
+
+Package: linux-image-6.8.0-85-generic
+Status: install ok installed
+Architecture: arm64
+Source: linux-signed
+Version: 6.8.0-85.85
+
+Package: linux-image-6.8.0-88-generic
+Status: install ok installed
+Architecture: arm64
+Source: linux-signed
+Version: 6.8.0-88.89
+
+Package: linux-image-generic
+Status: install ok installed
+Architecture: arm64
+Source: linux-meta
+Version: 6.8.0-88.89
+
+Package: unattended-upgrades
+Status: install ok installed
+Architecture: all
+Version: 2.9.1+nmu4ubuntu1

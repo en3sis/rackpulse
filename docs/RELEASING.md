@@ -12,7 +12,7 @@ make release              # patch: 0.2.1 -> 0.2.2
 make release BUMP=minor   # 0.2.1 -> 0.3.0
 ```
 
-`make release` stops if there are uncommitted changes, if `CHANGELOG.md` has no section for the new version, or if the agent version in `agent/VERSION` is not published yet (see "Agent releases"). Then it:
+`make release` stops if there are uncommitted changes, if `CHANGELOG.md` has no section for the new version, if `agent/install.sh` has no release public key, or if the agent version in `agent/VERSION` is not published yet with its signature (see "Agent releases"). Then it:
 
 1. Bumps `VERSION`, if the current version is already tagged. An untagged version is released as it is, which is also how a failed release is retried.
 2. Runs `make notarize`: builds, signs, notarizes, staples, and writes `dist/appcast.xml` with the release notes.
@@ -29,6 +29,7 @@ make release BUMP=minor   # 0.2.1 -> 0.3.0
 | Signing identity | `.env`, `SIGN_ID` (git-ignored) | Copy `.env.example` to `.env`. No quotes around values |
 | Notary credentials | Login keychain, profile named in `.env` as `NOTARY_PROFILE` | `xcrun notarytool store-credentials <profile>` with the Apple ID, the team ID, and an app-specific password |
 | Sparkle update key | Login keychain, account named in `.env` as `SPARKLE_ACCOUNT`, with a copy in 1Password | See "Update key" |
+| Agent signing key | A file outside the repository, path in `.env` as `AGENT_SIGNING_KEY`, with a copy in 1Password. The public key is in `agent/install.sh` | See "Agent signing key" |
 | Public download address | `.env`: `SITE_URL`, the public URL of the release files, without a trailing slash. Today `https://rackpulse.app` | The feed and download links are built from it, for example `$SITE_URL/download/Rackpulse.dmg`. The app's feed URL (`SUFeedURL` in `macos/Info.plist`) and the agent install URL (`AgentStore.installURL`, `agent/install.sh`) must match it |
 | R2 upload credentials | `.env`: `R2_ACCOUNT_ID`, `R2_BUCKET` (today `rackpulse-prod`, the same bucket as the website), `R2_PREFIX` (a folder in the bucket, empty for the bucket root), `R2_TOKEN`, `R2_SECRET` | Cloudflare dashboard, R2, Manage API tokens, with Object Read & Write on the bucket. Copy the token value and the Secret Access Key |
 | Tools | Homebrew | `create-dmg`, `rsvg-convert` |
@@ -54,6 +55,31 @@ rm /tmp/rackpulse-key
 ```
 
 Exported key files are git-ignored by the pattern `*sparkle-key*`. Delete them after you store them.
+
+## Agent signing key
+
+Agent releases are signed with an ECDSA P-256 key. `make publish-agent` signs `SHA256SUMS` into `SHA256SUMS.sig`, and `install.sh` checks that signature with the public key written in it before it checks the binary's checksum. A failed check stops the install.
+
+The check uses `openssl dgst -sha256 -verify`, which works the same in OpenSSL 1.1.1 (Debian 11) and 3.x (Debian 12, Ubuntu 22.04 and 24.04, Alpine 3.19 and later). Ed25519 is not used because OpenSSL 1.1.1 cannot verify it from the command line, and the `openssl` on macOS (LibreSSL) cannot create it. Debian and Ubuntu install `openssl` with `ca-certificates`. Stock Alpine has no `openssl` command, so `install.sh` stops there and asks for `apk add openssl`.
+
+Until `agent/install.sh` has a public key, `install.sh` refuses to install, and `make publish-agent` and `make release` refuse to run.
+
+To create the key (done once):
+
+```bash
+mkdir -p ~/.rackpulse && chmod 700 ~/.rackpulse
+openssl ecparam -name prime256v1 -genkey -noout -out ~/.rackpulse/agent-signing-key.pem
+chmod 600 ~/.rackpulse/agent-signing-key.pem
+openssl ec -in ~/.rackpulse/agent-signing-key.pem -pubout
+```
+
+1. Paste the printed public key into `agent/install.sh`, between the quotes of `release_key='` and `'`, with the `-----BEGIN PUBLIC KEY-----` and `-----END PUBLIC KEY-----` lines each on a line of their own. Commit it.
+2. Set `AGENT_SIGNING_KEY` in `.env` to the full path of the private key, for example `/Users/you/.rackpulse/agent-signing-key.pem`. `~` is not expanded.
+3. Store a copy of the private key in 1Password. Never commit it.
+
+The publish scripts check that the private key matches the public key in `install.sh` before they sign. If the private key is lost, create a new one, replace the public key in `agent/install.sh`, and publish the agent again. Servers fetch `install.sh` on every install and update, so they pick up the new key.
+
+`install.sh` itself is not signed. It is trusted through HTTPS from `SITE_URL`, so the signature protects the binaries only as long as `install.sh` on the server is the published one.
 
 ## What `make notarize` does
 
@@ -87,18 +113,22 @@ The Linux agent has its own version in `agent/VERSION` and ships separately from
 ```bash
 echo 0.2.2 > agent/VERSION
 make test-agent       # Go tests
-make agent            # build both binaries, SHA256SUMS and install.sh into dist/agent/<version>
-make publish-agent    # upload to R2 under agent/ (inside R2_PREFIX when it is set)
+make agent            # build both binaries, SHA256SUMS and install.sh into dist/agent/<version>, and sign when AGENT_SIGNING_KEY is set
+make publish-agent    # sign SHA256SUMS, then upload to R2 under agent/ (inside R2_PREFIX when it is set)
 ```
+
+`make publish-agent` stops before uploading if `agent/install.sh` has no public key, if `AGENT_SIGNING_KEY` is not set, or if the private key does not match the public key.
 
 | Path | Cache |
 |---|---|
-| `agent/install.sh`, `agent/rackpulse-agent-linux-amd64`, `agent/rackpulse-agent-linux-arm64`, `agent/SHA256SUMS` | 5 minutes |
+| `agent/install.sh`, `agent/rackpulse-agent-linux-amd64`, `agent/rackpulse-agent-linux-arm64`, `agent/SHA256SUMS`, `agent/SHA256SUMS.sig` | 5 minutes |
 | `agent/<version>/` with the same files | 1 year, never changes |
 
-The app offers the agent in `agent/VERSION` as the latest one. `make build` writes it into the app's `Info.plist` as `RackpulseAgentVersion`, and servers with an older agent show an update notice with the command. So publish a new agent before the app release that should offer it. `make release` checks this: it stops if `$SITE_URL/agent/<agent version>/SHA256SUMS` does not exist yet.
+The app offers the agent in `agent/VERSION` as the latest one. `make build` writes it into the app's `Info.plist` as `RackpulseAgentVersion`, and servers with an older agent show an update notice with the command. So publish a new agent before the app release that should offer it. `make release` checks this: it stops if `$SITE_URL/agent/<agent version>/SHA256SUMS` or `SHA256SUMS.sig` does not exist yet.
 
 The app and the agent keep separate versions. A new app works with older agents and skips what they don't support, so an app release does not need a new agent.
+
+`install.sh` refuses to install an agent older than the one on the server. To roll back, publish the fix as a new, higher version. Republishing an older version as the latest only works on servers where the command is run with `--allow-downgrade`.
 
 ## Dev builds
 
@@ -108,6 +138,8 @@ The app and the agent keep separate versions. A new app works with older agents 
 make dev-build              # build, notarize, upload app and agent
 make dev-build NOTARIZE=0   # skip notarizing and the app download, upload only the agent
 ```
+
+`make dev-build` signs the dev agent with the same key as releases when `AGENT_SIGNING_KEY` is set. Without it, the build and upload still work, but `install.sh` refuses the unsigned dev agent.
 
 | | Stable | Rackpulse Dev |
 |---|---|---|

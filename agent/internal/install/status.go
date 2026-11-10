@@ -26,11 +26,13 @@ func Status(version string) error {
 	fmt.Printf("Version: %s\n", version)
 	cfg, err := config.Load(config.Path)
 	if err != nil {
+		fmt.Println(dockerAccessLine(currentDockerAccess(), false))
 		if errors.Is(err, os.ErrPermission) {
 			return errors.New("Run this command as root to see the port and the agent state")
 		}
 		return fmt.Errorf("read config: %w", err)
 	}
+	fmt.Println(dockerAccessLine(currentDockerAccess(), cfg.NoDocker))
 	if cfg.Listen == "" {
 		fmt.Printf("Port: %d on all addresses\n", cfg.Port)
 	} else {

@@ -37,6 +37,7 @@ struct PollContext {
     let serverPrices: [Int64: Decimal]
     let alertSettings: AlertSettings
     var agents: [Int64: AgentReport] = [:]
+    var security: [Int64: SecurityResult] = [:]
 }
 
 @MainActor
@@ -135,7 +136,8 @@ final class ProjectPoller {
             next.iopsBaseline = baseline
             next.resourcesFetched = now
             let snapshot = PollSnapshot(time: now, servers: next.servers, metrics: activity, iopsBaseline: baseline, actions: [],
-                                        volumes: nil, firewalls: nil, costForecast: Self.userForecast(next.servers, context), agents: context.agents)
+                                        volumes: nil, firewalls: nil, costForecast: Self.userForecast(next.servers, context), agents: context.agents,
+                                        security: context.security)
             let (alerts, events) = RuleEngine(settings: context.alertSettings).evaluate(snapshot, state: next.alerts)
             next.alerts = alerts
             next.lastUpdated = now
@@ -181,7 +183,8 @@ final class ProjectPoller {
                 volumes: resourcesRefreshed ? next.volumes : nil,
                 firewalls: resourcesRefreshed ? next.firewalls : nil,
                 costForecast: costForecast,
-                agents: context.agents
+                agents: context.agents,
+                security: context.security
             )
             let (alerts, events) = RuleEngine(settings: context.alertSettings).evaluate(snapshot, state: next.alerts)
             next.alerts = alerts

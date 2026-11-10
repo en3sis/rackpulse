@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.0
+
+### App
+
+- Security checks for each server with the agent: security updates waiting, a hardening checklist, and known vulnerabilities in the server's packages, in Docker Compose project dependencies, and inside the images of running containers. Vulnerability lookups are off until you turn them on in Settings, Security.
+- Vulnerabilities come from OSV.dev. Known exploited ones are marked from the CISA list, and the chance of exploit comes from FIRST's daily EPSS file. Both lists are downloaded whole, so CVE ids stay on your Mac.
+- Optional malware and typosquatting checks for app dependencies from Socket, with your own API token. Settings shows how many checks are left this hour, and each server can use only part of the quota.
+- The Security tab starts with what to fix now: packages known to be exploited, malware, and critical vulnerabilities that have a fix. Findings are grouped by package, with the command to upgrade host packages and where each one was found: the host, a lockfile, or an image.
+- Ignore a vulnerability with a reason (Not affected, Accept risk, Fix later), a note, and an end: 30 days, 90 days, or until a fix is available. It comes back when the ignore ends, or when it becomes known exploited or malware. Ignored findings are listed under Show ignored. Critical and known exploited vulnerabilities can only be ignored as Not affected, with a note, for up to 30 days. Malware can't be ignored.
+- A Security tab in the popover lists each server with its vulnerabilities and failing checks, most urgent first. ⌘3 opens it.
+- Export a server's findings as a Markdown report, its packages as a CycloneDX SBOM, and its ignores as OpenVEX.
+- Copy a fix prompt for an AI agent: the packages to upgrade, fixed versions, advisory ids and failing checks of a server, in Markdown.
+- Each vulnerable package shows whether a fix is available, waiting to be installed, or not published yet.
+- In a server, ⌘1 to ⌘4 switch its tabs.
+- Failed login session units (`session-*.scope`) no longer count as failed services.
+- Servers without the Hetzner API, such as agent-only hosts, now raise vulnerability and hardening alerts.
+- Security alerts notify once per finding: one summary after the first scan, then only new findings, worse ones, and ones that come back.
+- Version comparison follows each ecosystem's rules (Alpine, Python, npm, Go, Cargo, RubyGems, Composer), so fix versions and pre-releases are right. CVSS v4 scores are read when an advisory has no v3 score.
+
+### Agent
+
+- Reports the packages, security updates, SSH, firewall, update and Docker settings, open ports and lockfiles of Compose projects that the app needs for the Security tab.
+- Reads OS packages and lockfiles inside the images of running containers through the Docker API, without running anything in them. Each image is read once.
+- New Docker checks: `pid: host`, added capabilities, containers running as root, images on `:latest` or with no tag, and images older than 90 days. The Docker socket check also finds mounts of `/run` and `/var/run`. All Docker checks look only at running containers.
+- `--no-docker` installs the agent without access to Docker, since the docker group is close to root. Updates keep this choice. `--docker` turns access back on.
+- Releases are signed. `install.sh` checks the signature before it installs anything and needs `openssl` on the server. It refuses to replace an agent with an older version unless you pass `--allow-downgrade`.
+
 ## 0.3.0
 
 ### App

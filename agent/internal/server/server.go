@@ -11,6 +11,7 @@ import (
 	"github.com/en3sis/rackpulse/agent/internal/collect"
 	"github.com/en3sis/rackpulse/agent/internal/history"
 	"github.com/en3sis/rackpulse/agent/internal/pairing"
+	"github.com/en3sis/rackpulse/agent/internal/security"
 )
 
 const failedAuthDelay = 750 * time.Millisecond
@@ -20,6 +21,7 @@ type handler struct {
 	token       string
 	fingerprint string
 	collector   *collect.Collector
+	security    *security.Collector
 	host        *history.Host
 	containers  *history.Containers
 }
@@ -44,6 +46,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		needsKey = false
 	case "/v1/snapshot":
 		serve = h.snapshot
+	case "/v1/security":
+		serve = h.securityReport
 	case "/v1/history":
 		serve = h.hostHistory
 	case "/v1/containers/history":
@@ -87,17 +91,25 @@ func (h *handler) hello(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) snapshot(w http.ResponseWriter, r *http.Request) {
+	serveCached(w, r, h.collector.Ready(), h.collector.Latest, "The first sample is not ready yet")
+}
+
+func (h *handler) securityReport(w http.ResponseWriter, r *http.Request) {
+	serveCached(w, r, h.security.Ready(), h.security.Latest, "The first security check is not ready yet")
+}
+
+func serveCached(w http.ResponseWriter, r *http.Request, ready <-chan struct{}, latest func() []byte, notReady string) {
 	select {
-	case <-h.collector.Ready():
+	case <-ready:
 	case <-time.After(20 * time.Second):
-		writeError(w, http.StatusServiceUnavailable, "The first sample is not ready yet")
+		writeError(w, http.StatusServiceUnavailable, notReady)
 		return
 	case <-r.Context().Done():
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	w.Write(h.collector.Latest())
+	w.Write(latest())
 }
 
 func parseSince(r *http.Request) (int64, bool) {

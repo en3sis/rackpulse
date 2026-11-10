@@ -1,0 +1,27 @@
+{
+    "_meta": {
+        "hash": {"sha256": "abc"},
+        "pipfile-spec": 6,
+        "requires": {"python_version": "3.11"},
+        "sources": [{"name": "pypi", "url": "https://pypi.org/simple", "verify_ssl": true}]
+    },
+    "default": {
+        "requests": {
+            "hashes": ["sha256:abc"],
+            "index": "pypi",
+            "version": "==2.31.0"
+        },
+        "Django": {
+            "version": "==4.2.1"
+        },
+        "mylib": {
+            "git": "https://github.com/acme/mylib.git",
+            "ref": "abc"
+        }
+    },
+    "develop": {
+        "pytest": {
+            "version": "==7.4.0"
+        }
+    }
+}

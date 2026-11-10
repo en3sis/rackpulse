@@ -13,12 +13,14 @@ final class AppActions {
     var chartRange: MetricRange?
     var opened = 0
     var visible = false
+    var holdOpen = false
     var shortcutChanged: () -> Void = {}
 }
 
 enum PanelRoute: Equatable {
     case servers
     case costs
+    case security
     case server(UUID, Int64, MetricRange)
     case agent(UUID, Int64)
     case serverTab(UUID, Int64, ServerTab)
@@ -75,7 +77,7 @@ final class StatusBarController: NSObject {
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { [weak self] note in
             let window = (note.object as AnyObject?).map(ObjectIdentifier.init)
             MainActor.assumeIsolated {
-                guard let self, let window, window != ObjectIdentifier(self.panel) else { return }
+                guard let self, let window, window != ObjectIdentifier(self.panel), !self.actions.holdOpen else { return }
                 if let icon = self.item.button?.window, window == ObjectIdentifier(icon) { return }
                 self.close()
             }
@@ -113,6 +115,10 @@ final class StatusBarController: NSObject {
 
     func show() {
         guard let frame = placement(height: height) else { return }
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
+        if let mouseUpMonitor { NSEvent.removeMonitor(mouseUpMonitor) }
+        clickMonitor = nil
+        mouseUpMonitor = nil
         panel.setFrame(frame, display: true)
         layoutContent()
         actions.opened += 1
@@ -130,7 +136,10 @@ final class StatusBarController: NSObject {
         }
         monitor.refreshIfStale()
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            MainActor.assumeIsolated { self?.close() }
+            MainActor.assumeIsolated {
+                guard self?.actions.holdOpen != true else { return }
+                self?.close()
+            }
         }
     }
 

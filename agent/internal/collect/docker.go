@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/user"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -142,14 +144,27 @@ func (d *dockerCollector) get(ctx context.Context, path string, target any) erro
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
-		return fmt.Errorf("Docker API returned %s for %s", resp.Status, strings.SplitN(path, "?", 2)[0])
+		return &APIError{Code: resp.StatusCode, Status: resp.Status, Path: strings.SplitN(path, "?", 2)[0]}
 	}
 	return json.NewDecoder(resp.Body).Decode(target)
+}
+
+type APIError struct {
+	Code   int
+	Status string
+	Path   string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("Docker API returned %s for %s", e.Status, e.Path)
 }
 
 func dockerErrorMessage(err error) string {
 	switch {
 	case errors.Is(err, syscall.EACCES), errors.Is(err, syscall.EPERM):
+		if !inDockerGroup() {
+			return "Docker access is off. The rackpulse user is not in the docker group"
+		}
 		return "Permission denied on " + dockerSocket
 	case errors.Is(err, syscall.ECONNREFUSED), errors.Is(err, syscall.ENOENT):
 		return "Docker is not running"
@@ -157,6 +172,30 @@ func dockerErrorMessage(err error) string {
 		return "Docker did not answer in time"
 	}
 	return err.Error()
+}
+
+func inDockerGroup() bool {
+	group, err := user.LookupGroup("docker")
+	if err != nil {
+		return true
+	}
+	gid, err := strconv.Atoi(group.Gid)
+	if err != nil {
+		return true
+	}
+	if os.Getegid() == gid {
+		return true
+	}
+	groups, err := os.Getgroups()
+	if err != nil {
+		return true
+	}
+	for _, id := range groups {
+		if id == gid {
+			return true
+		}
+	}
+	return false
 }
 
 type listedContainer struct {

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -21,15 +22,20 @@ func Run(args []string, version string) error {
 	pair := flags.String("pair", "", "pairing key from Rackpulse")
 	port := flags.Int("port", config.DefaultPort, "TCP port")
 	listen := flags.String("listen", "", "listen only on this address, or tailscale")
+	docker := flags.Bool("docker", false, "add the rackpulse user to the docker group")
+	noDocker := flags.Bool("no-docker", false, "keep the rackpulse user out of the docker group")
 	flags.SetOutput(io.Discard)
 	if err := flags.Parse(args); err != nil {
-		return fmt.Errorf("%v. Options: --pair <key>, --port <port>, --listen <ip|tailscale>", err)
+		return fmt.Errorf("%v. Options: --pair <key>, --port <port>, --listen <ip|tailscale>, --docker, --no-docker", err)
 	}
 	if flags.NArg() > 0 {
 		return fmt.Errorf("Unexpected argument %q", flags.Arg(0))
 	}
 	set := map[string]bool{}
 	flags.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	if err := checkDockerFlags(set, *docker, *noDocker); err != nil {
+		return err
+	}
 
 	if err := requireRoot(); err != nil {
 		return err
@@ -40,6 +46,9 @@ func Run(args []string, version string) error {
 
 	cfg := config.Config{Port: config.DefaultPort}
 	existing, err := config.Load(config.Path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("Cannot read %s: %v. Fix or remove the file and run the command again", config.Path, err)
+	}
 	hadConfig := err == nil
 	migrating := legacyInstallFound()
 	if hadConfig {
@@ -71,6 +80,7 @@ func Run(args []string, version string) error {
 			cfg.Listen = address
 		}
 	}
+	cfg.NoDocker = dockerChoice(cfg.NoDocker, set)
 	if name := tailscaleName(); name != "" {
 		cfg.TailscaleName = name
 	}
@@ -90,6 +100,10 @@ func Run(args []string, version string) error {
 	}
 	if err := writeConfig(cfg, account); err != nil {
 		return fmt.Errorf("write %s: %w", config.Path, err)
+	}
+	access, err := setDockerAccess(!cfg.NoDocker)
+	if err != nil {
+		return fmt.Errorf("Could not change Docker access: %w. The choice is saved in %s and applied when you run the install command again", err, config.Path)
 	}
 
 	wasActive := serviceActive()
@@ -132,7 +146,7 @@ func Run(args []string, version string) error {
 	if !waitForListening(cfg, 5*time.Second) {
 		return fmt.Errorf("The service did not start listening on %s. See: journalctl -u rackpulse-agent -n 20", cfg.Address())
 	}
-	summary := installSummary{updated: wasActive || hadConfig, replacedKey: replacedKey, backfilled: backfilled}
+	summary := installSummary{updated: wasActive || hadConfig, replacedKey: replacedKey, backfilled: backfilled, docker: access}
 	if ufwActive() {
 		var previous *config.Config
 		if hadConfig {
@@ -157,6 +171,26 @@ func Run(args []string, version string) error {
 	return nil
 }
 
+func checkDockerFlags(set map[string]bool, docker, noDocker bool) error {
+	if set["docker"] && set["no-docker"] {
+		return errors.New("Use --docker or --no-docker, not both")
+	}
+	if (set["docker"] && !docker) || (set["no-docker"] && !noDocker) {
+		return errors.New("--docker and --no-docker take no value")
+	}
+	return nil
+}
+
+func dockerChoice(stored bool, set map[string]bool) bool {
+	switch {
+	case set["docker"]:
+		return false
+	case set["no-docker"]:
+		return true
+	}
+	return stored
+}
+
 type installSummary struct {
 	updated     bool
 	replacedKey bool
@@ -165,6 +199,7 @@ type installSummary struct {
 	certKept    bool
 	newKey      bool
 	ufw         ufwState
+	docker      dockerAccess
 }
 
 type ufwState int

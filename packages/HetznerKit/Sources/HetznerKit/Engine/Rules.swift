@@ -3,10 +3,16 @@ import Foundation
 public enum RuleKind: String, Sendable, Hashable, Codable, CaseIterable {
     case serverDown, sustainedCPU, storageBox, trafficQuota, diskIO, budget, unexpectedChange
     case diskSpace, memory, container, failedService, rebootRequired, agentUnreachable
+    case securityUpdates, vulnerability, hardening
 
-    public static let agentKinds: [RuleKind] = [.diskSpace, .memory, .container, .failedService, .rebootRequired, .agentUnreachable]
+    public static let agentKinds: [RuleKind] = [
+        .diskSpace, .memory, .container, .failedService, .rebootRequired, .agentUnreachable,
+        .securityUpdates, .vulnerability, .hardening,
+    ]
+    public static let securityKinds: [RuleKind] = [.securityUpdates, .vulnerability, .hardening]
 
     public var needsAgent: Bool { Self.agentKinds.contains(self) }
+    public var needsSecurityResult: Bool { Self.securityKinds.contains(self) }
 }
 
 public enum Delivery: String, Sendable, Hashable, Codable {
@@ -67,6 +73,9 @@ public struct RuleConfig: Sendable, Hashable, Codable, Identifiable {
         RuleConfig(kind: .failedService, enabled: true, threshold: 0, delivery: .push),
         RuleConfig(kind: .rebootRequired, enabled: true, threshold: 0, delivery: .banner),
         RuleConfig(kind: .agentUnreachable, enabled: true, threshold: 3, delivery: .push),
+        RuleConfig(kind: .securityUpdates, enabled: true, threshold: 0, duration: 3 * 86_400, delivery: .banner),
+        RuleConfig(kind: .vulnerability, enabled: true, threshold: Double(AdvisorySeverity.high.rank), delivery: .push),
+        RuleConfig(kind: .hardening, enabled: true, threshold: 0, delivery: .banner),
     ]
 }
 
@@ -158,6 +167,7 @@ public struct PollSnapshot: Sendable {
     public var storageForecasts: [Int64: UsageForecast]
     public var costForecast: Decimal?
     public var agents: [Int64: AgentReport]
+    public var security: [Int64: SecurityResult]
 
     public init(
         time: Date,
@@ -170,7 +180,8 @@ public struct PollSnapshot: Sendable {
         storageBoxes: [StorageBox]? = nil,
         storageForecasts: [Int64: UsageForecast] = [:],
         costForecast: Decimal? = nil,
-        agents: [Int64: AgentReport] = [:]
+        agents: [Int64: AgentReport] = [:],
+        security: [Int64: SecurityResult] = [:]
     ) {
         self.time = time
         self.servers = servers
@@ -183,6 +194,7 @@ public struct PollSnapshot: Sendable {
         self.storageForecasts = storageForecasts
         self.costForecast = costForecast
         self.agents = agents
+        self.security = security
     }
 }
 
@@ -267,7 +279,7 @@ public struct AlertState: Sendable, Hashable, Codable {
         var state = self
         state.snoozed = snoozed.filter { $0.value > now }
         guard let lastPoll, now.timeIntervalSince(lastPoll) > Self.resumeGap else { return state }
-        for (id, track) in tracks where track.alert == nil {
+        for (id, track) in tracks where track.alert == nil && track.kind != .securityUpdates {
             state.tracks[id] = nil
         }
         for (id, track) in state.tracks where track.alert != nil {

@@ -31,13 +31,15 @@ struct AppSettings: Codable, Equatable {
     var compactList = false
     var serverAlerts: [String: ServerAlertOverride] = [:]
     var serverEnvironments: [String: ServerEnvironment] = [:]
+    var security = SecurityScanSettings()
+    var socketOrganization = ""
     var serverPrices: [String: Decimal] = [:]
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
         case pollInterval, alerts, priceKind, showsCosts, lockWithTouchID, serverAlerts, readout, chartRange, shortcut, compactList
-        case serverEnvironments, serverPrices
+        case serverEnvironments, serverPrices, security, socketOrganization
     }
 
     static func key(project: UUID, server: Int64) -> String {
@@ -57,6 +59,8 @@ struct AppSettings: Codable, Equatable {
         compactList = (try? container.decode(Bool.self, forKey: .compactList)) ?? false
         serverAlerts = (try? container.decode([String: ServerAlertOverride].self, forKey: .serverAlerts)) ?? [:]
         serverEnvironments = (try? container.decode([String: ServerEnvironment].self, forKey: .serverEnvironments)) ?? [:]
+        security = (try? container.decode(SecurityScanSettings.self, forKey: .security)) ?? SecurityScanSettings()
+        socketOrganization = (try? container.decode(String.self, forKey: .socketOrganization)) ?? ""
         serverPrices = (try? container.decode([String: Decimal].self, forKey: .serverPrices)) ?? [:]
         for rule in RuleConfig.defaults where !alerts.rules.contains(where: { $0.kind == rule.kind }) {
             alerts.rules.append(rule)

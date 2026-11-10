@@ -200,7 +200,11 @@ public enum NotificationPlanner {
             latest.severity = group.map(\.severity).max() ?? latest.severity
             latest.items = items
             guard items.count > 1 else { return latest }
-            latest.title = "\(latest.heading): \(items.count) alerts"
+            latest.title = switch latest.kind {
+            case .vulnerability: "\(latest.heading): \(items.count) vulnerability alerts"
+            case .hardening: "\(latest.heading): \(items.count) hardening checks fail"
+            default: "\(latest.heading): \(items.count) alerts"
+            }
             latest.body = lines(items)
             return latest
         }

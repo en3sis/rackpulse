@@ -1,0 +1,42 @@
+{
+ "id": "MAL-2025-20690",
+ "summary": "Malicious code in flatmap-stream (npm)",
+ "details": "The package flatmap-stream was found to contain malicious code.",
+ "modified": "2025-08-14T18:52:04Z",
+ "published": "2025-08-14T18:52:04Z",
+ "database_specific": {
+  "malicious-packages-origins": null
+ },
+ "affected": [
+  {
+   "package": {
+    "name": "flatmap-stream",
+    "ecosystem": "npm",
+    "purl": "pkg:npm/flatmap-stream"
+   },
+   "ranges": [
+    {
+     "type": "SEMVER",
+     "events": [
+      {
+       "introduced": "0"
+      }
+     ]
+    }
+   ],
+   "database_specific": {
+    "source": "https://github.com/ossf/malicious-packages/blob/main/osv/malicious/npm/flatmap-stream/MAL-2025-20690.json"
+   }
+  }
+ ],
+ "schema_version": "1.7.3",
+ "credits": [
+  {
+   "name": "Amazon Inspector",
+   "contact": [
+    "actran@amazon.com"
+   ],
+   "type": "FINDER"
+  }
+ ]
+}

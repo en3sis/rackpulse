@@ -37,12 +37,22 @@ enum MetricRange: String, CaseIterable, Identifiable, Codable {
 }
 
 enum ServerTab: String, Hashable {
-    case overview, docker, details
+    case overview, docker, security, details
+
+    var icon: String {
+        switch self {
+        case .overview: "gauge.with.dots.needle.33percent"
+        case .docker: "shippingbox"
+        case .security: "shield"
+        case .details: "info.circle"
+        }
+    }
 
     var title: String {
         switch self {
         case .overview: "Overview"
         case .docker: "Docker"
+        case .security: "Security"
         case .details: "Details"
         }
     }
@@ -102,18 +112,20 @@ struct ServerDetailView: View {
                     .padding(.top, 8)
             }
             if tabs.count > 1 {
-                SegmentedControl(selection: $tab, options: tabs.map { ($0, $0.title) })
+                SegmentedControl(selection: $tab, options: tabs.map { ($0, $0.title) }, icon: \.icon)
                     .padding(.horizontal, 16)
                     .padding(.top, 14)
             }
             switch tab {
             case .overview: overview
             case .docker: docker
+            case .security: SecurityPanel(server: server, project: project, monitor: monitor)
             case .details: details
             }
 
             Color.clear.frame(height: 14)
         }
+        .background { tabShortcuts }
         .onExitCommand(perform: back)
         .task(id: range) { await loadMetrics() }
         .onChange(of: range) { app.chartRange = range }
@@ -131,9 +143,25 @@ struct ServerDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private var tabShortcuts: some View {
+        if tabs.count > 1 {
+            Group {
+                ForEach(Array(tabs.prefix(9).enumerated()), id: \.element) { index, item in
+                    Button("") { tab = item }
+                        .keyboardShortcut(KeyEquivalent(Character(String(index + 1))))
+                }
+            }
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
+        }
+    }
+
     private var tabs: [ServerTab] {
         var tabs: [ServerTab] = [.overview]
         if snapshot?.docker != nil { tabs.append(.docker) }
+        if hasAgent { tabs.append(.security) }
         tabs.append(.details)
         return tabs
     }
@@ -145,7 +173,8 @@ struct ServerDetailView: View {
     @ViewBuilder
     private var overview: some View {
         if hasAgent {
-            AgentOverview(server: server, project: project, monitor: monitor, openSetup: openAgent, openDocker: { tab = .docker })
+            AgentOverview(server: server, project: project, monitor: monitor, openSetup: openAgent,
+                          openDocker: { tab = .docker }, openSecurity: { tab = .security })
         }
         if !server.agentOnly || hasAgent {
         SectionHeader("Activity")
@@ -188,7 +217,8 @@ struct ServerDetailView: View {
         .padding(.top, 12)
 
         if hasAgent {
-            AgentOverview(server: server, project: project, monitor: monitor, part: .stats, openSetup: openAgent, openDocker: { tab = .docker })
+            AgentOverview(server: server, project: project, monitor: monitor, part: .stats, openSetup: openAgent, openDocker: { tab = .docker },
+                          openSecurity: { tab = .security })
                 .padding(.top, 4)
         }
         UptimeCard(timeline: timeline, hasAgent: hasAgent, agentOnly: server.agentOnly)

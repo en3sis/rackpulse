@@ -122,7 +122,65 @@ content_type() {
   esac
 }
 
-agent_files=(install.sh rackpulse-agent-linux-amd64 rackpulse-agent-linux-arm64 SHA256SUMS)
+agent_build_files=(install.sh rackpulse-agent-linux-amd64 rackpulse-agent-linux-arm64 SHA256SUMS)
+agent_files=("${agent_build_files[@]}" SHA256SUMS.sig)
+
+release_key() {
+  sed -n '/^-----BEGIN PUBLIC KEY-----$/,/^-----END PUBLIC KEY-----$/p' "$1"
+}
+
+require_release_key() {
+  if [ -z "$(release_key agent/install.sh)" ]; then
+    echo "agent/install.sh has no release public key. Create the agent signing key first, see \"Agent signing key\" in docs/RELEASING.md"
+    exit 1
+  fi
+}
+
+key_digest() {
+  local der digest
+  der=$(mktemp)
+  if ! openssl pkey "$@" -pubout -outform DER -out "$der" 2>/dev/null || [ ! -s "$der" ]; then
+    rm -f "$der"
+    return 1
+  fi
+  digest=$(shasum -a 256 "$der")
+  rm -f "$der"
+  echo "${digest%% *}"
+}
+
+sign_agent() {
+  local dir=$1 public mine theirs
+  require_release_key
+  if [ -z "${AGENT_SIGNING_KEY:-}" ] || [ ! -f "$AGENT_SIGNING_KEY" ]; then
+    echo "Set AGENT_SIGNING_KEY in .env to the path of the agent signing key. See \"Agent signing key\" in docs/RELEASING.md"
+    exit 1
+  fi
+  public=$(mktemp)
+  release_key "$dir/install.sh" >"$public"
+  if ! mine=$(key_digest -in "$AGENT_SIGNING_KEY"); then
+    rm -f "$public"
+    echo "AGENT_SIGNING_KEY is not a readable private key"
+    exit 1
+  fi
+  if ! theirs=$(key_digest -pubin -in "$public"); then
+    rm -f "$public"
+    echo "The public key in $dir/install.sh is not valid"
+    exit 1
+  fi
+  if [ "$mine" != "$theirs" ]; then
+    rm -f "$public"
+    echo "AGENT_SIGNING_KEY does not match the public key in $dir/install.sh"
+    exit 1
+  fi
+  openssl dgst -sha256 -sign "$AGENT_SIGNING_KEY" -out "$dir/SHA256SUMS.sig" "$dir/SHA256SUMS"
+  if ! openssl dgst -sha256 -verify "$public" -signature "$dir/SHA256SUMS.sig" "$dir/SHA256SUMS" >/dev/null; then
+    rm -f "$public" "$dir/SHA256SUMS.sig"
+    echo "The signature of $dir/SHA256SUMS does not verify"
+    exit 1
+  fi
+  rm -f "$public"
+  echo "Signed $dir/SHA256SUMS"
+}
 
 DEV_AGENT=dist/dev-agent-version
 

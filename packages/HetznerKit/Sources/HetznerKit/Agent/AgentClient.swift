@@ -27,6 +27,8 @@ public enum AgentError: Error, Sendable, Equatable {
     case wrongKey
     case certificateChanged
     case invalidResponse
+    case unsupported
+    case notReady
 }
 
 public struct AgentPairing: Sendable, Hashable {
@@ -89,19 +91,31 @@ public final class AgentClient: Sendable {
         return try await get("/v1/containers/history?name=\(encoded)&since=\(hour)")
     }
 
-    private func get<T: Decodable>(_ target: String) async throws -> T {
-        let exchange = AgentExchange(endpoint: endpoint, target: target, token: token, pinned: fingerprint)
-        let (raw, _) = try await exchange.run(timeout: 10)
-        let (status, body) = try AgentExchange.parse(raw)
+    public func security() async throws -> AgentSecurity {
+        try await get("/v1/security", timeout: 30, notFound: .unsupported, unavailable: .notReady)
+    }
+
+    static func error(status: Int, notFound: AgentError = .invalidResponse, unavailable: AgentError = .invalidResponse) -> AgentError? {
         switch status {
-        case 200:
-            do {
-                return try AgentJSON.decoder().decode(T.self, from: body)
-            } catch {
-                throw AgentError.invalidResponse
-            }
-        case 401: throw AgentError.wrongKey
-        default: throw AgentError.invalidResponse
+        case 200: nil
+        case 401: .wrongKey
+        case 404: notFound
+        case 503: unavailable
+        default: .invalidResponse
+        }
+    }
+
+    private func get<T: Decodable>(
+        _ target: String, timeout: TimeInterval = 10, notFound: AgentError = .invalidResponse, unavailable: AgentError = .invalidResponse
+    ) async throws -> T {
+        let exchange = AgentExchange(endpoint: endpoint, target: target, token: token, pinned: fingerprint)
+        let (raw, _) = try await exchange.run(timeout: timeout)
+        let (status, body) = try AgentExchange.parse(raw)
+        if let error = Self.error(status: status, notFound: notFound, unavailable: unavailable) { throw error }
+        do {
+            return try AgentJSON.decoder().decode(T.self, from: body)
+        } catch {
+            throw AgentError.invalidResponse
         }
     }
 }

@@ -38,11 +38,14 @@ struct Snapshots {
         var log: [String] = []
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             NSApp.appearance = NSAppearance(named: appearance)
-            var routes: [(String, PanelRoute)] = [("servers", .servers), ("costs", .costs), ("onboarding", .addProject)]
+            var routes: [(String, PanelRoute)] = [("servers", .servers), ("costs", .costs), ("security", .security), ("onboarding", .addProject)]
             if let (project, server) = shownServer {
                 routes.append(("server", .server(project, server, .hour)))
                 routes.append(("agent", .agent(project, server)))
                 routes.append(("server-details", .serverTab(project, server, .details)))
+                if monitor.agents.link(project, server)?.isPaired == true {
+                    routes.append(("server-security", .serverTab(project, server, .security)))
+                }
                 if let docker = monitor.agents.state(project, server)?.snapshot?.docker {
                     routes.append(("server-docker", .serverTab(project, server, .docker)))
                     if let container = docker.containers.first(where: { $0.ports?.isEmpty == false }) ?? docker.containers.first {
@@ -72,7 +75,7 @@ struct Snapshots {
             }
             actions.route = .servers
             statusBar.close()
-            var pages: [(String, SettingsPage)] = [("general", .general), ("alerts", .alerts), ("about", .about)]
+            var pages: [(String, SettingsPage)] = [("general", .general), ("alerts", .alerts), ("security", .security), ("about", .about)]
             if let project = store.selected { pages.append(("project", .project(project.id))) }
             for (label, page) in pages {
                 settings.requestedPage = page

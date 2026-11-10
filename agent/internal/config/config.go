@@ -27,6 +27,7 @@ type Config struct {
 	Port          int    `json:"port"`
 	Listen        string `json:"listen"`
 	TailscaleName string `json:"tailscaleName,omitempty"`
+	NoDocker      bool   `json:"noDocker,omitempty"`
 }
 
 func Load(path string) (Config, error) {

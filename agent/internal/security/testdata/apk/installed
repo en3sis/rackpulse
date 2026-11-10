@@ -1,0 +1,22 @@
+C:Q1abc=
+P:musl
+V:1.2.5-r0
+A:aarch64
+S:383152
+I:622592
+T:the musl c library (libc) implementation
+o:musl
+F:lib
+R:ld-musl-aarch64.so.1
+
+C:Q1def=
+P:libcrypto3
+V:3.3.2-r0
+A:aarch64
+o:openssl
+F:usr/lib
+
+C:Q1ghi=
+P:busybox
+V:1.36.1-r29
+A:aarch64

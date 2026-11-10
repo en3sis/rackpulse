@@ -98,11 +98,6 @@ func ensureUser() (account, error) {
 	if err != nil {
 		return account{}, fmt.Errorf("group %s not found: %w", userName, err)
 	}
-	if _, err := user.LookupGroup("docker"); err == nil {
-		if err := command("usermod", "-aG", "docker", userName); err != nil {
-			return account{}, err
-		}
-	}
 	uid, _ := strconv.Atoi(found.Uid)
 	gid, _ := strconv.Atoi(group.Gid)
 	return account{uid: uid, gid: gid}, nil
@@ -145,4 +140,82 @@ func chownTree(root string, owner account) error {
 		}
 		return os.Lchown(path, owner.uid, owner.gid)
 	})
+}
+
+type dockerAccess int
+
+const (
+	dockerMissing dockerAccess = iota
+	dockerOn
+	dockerOff
+)
+
+const dockerGroup = "docker"
+
+func currentDockerAccess() dockerAccess {
+	group, err := user.LookupGroup(dockerGroup)
+	if err != nil {
+		return dockerMissing
+	}
+	found, err := user.Lookup(userName)
+	if err != nil {
+		return dockerOff
+	}
+	ids, err := found.GroupIds()
+	if err != nil {
+		return dockerOff
+	}
+	if hasGroup(ids, group.Gid) {
+		return dockerOn
+	}
+	return dockerOff
+}
+
+func hasGroup(ids []string, gid string) bool {
+	for _, id := range ids {
+		if id == gid {
+			return true
+		}
+	}
+	return false
+}
+
+func setDockerAccess(enabled bool) (dockerAccess, error) {
+	current := currentDockerAccess()
+	switch {
+	case current == dockerMissing:
+		return dockerMissing, nil
+	case enabled && current == dockerOff:
+		if err := command("usermod", "-aG", dockerGroup, userName); err != nil {
+			return current, err
+		}
+	case !enabled && current == dockerOn:
+		var err error
+		if _, lookErr := exec.LookPath("gpasswd"); lookErr == nil {
+			err = command("gpasswd", "-d", userName, dockerGroup)
+		} else {
+			err = command("deluser", userName, dockerGroup)
+		}
+		if err != nil {
+			return current, err
+		}
+	}
+	if enabled {
+		return dockerOn, nil
+	}
+	return dockerOff, nil
+}
+
+func dockerAccessLine(access dockerAccess, noDocker bool) string {
+	switch {
+	case access == dockerOn:
+		return "Docker access: on. The rackpulse user is in the docker group."
+	case access == dockerOff && noDocker:
+		return "Docker access: off, set with --no-docker. Containers, image scanning and Docker checks are not available. Install with --docker to turn it on."
+	case access == dockerOff:
+		return "Docker access: off. The rackpulse user is not in the docker group, so containers, image scanning and Docker checks are not available. Run the install command again to turn it on."
+	case noDocker:
+		return "Docker access: off. Docker is not installed, and --no-docker is set."
+	}
+	return "Docker access: off. Docker is not installed."
 }
