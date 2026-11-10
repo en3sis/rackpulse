@@ -1,0 +1,39 @@
+{
+  "name": "web",
+  "version": "1.0.0",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "web",
+      "version": "1.0.0",
+      "dependencies": { "lodash": "^4.17.20" }
+    },
+    "node_modules/lodash": {
+      "version": "4.17.20",
+      "resolved": "https://registry.npmjs.org/lodash/-/lodash-4.17.20.tgz"
+    },
+    "node_modules/@babel/core": {
+      "version": "7.22.0"
+    },
+    "node_modules/express/node_modules/debug": {
+      "version": "2.6.9"
+    },
+    "node_modules/debug": {
+      "version": "4.3.4",
+      "dev": true
+    },
+    "node_modules/shared": {
+      "resolved": "packages/shared",
+      "link": true
+    },
+    "packages/shared": {
+      "name": "shared",
+      "version": "0.1.0"
+    },
+    "node_modules/string-width-cjs": {
+      "name": "string-width",
+      "version": "4.2.3"
+    }
+  }
+}

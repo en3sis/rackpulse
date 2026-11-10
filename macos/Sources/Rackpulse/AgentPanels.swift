@@ -133,25 +133,26 @@ struct AgentOverview: View {
     var part: Part = .notices
     let openSetup: () -> Void
     let openDocker: () -> Void
+    let openSecurity: () -> Void
 
     var body: some View {
         let store = monitor.agents
         let state = store.state(project.id, server.id)
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             switch part {
             case .notices: notices(state)
             case .stats: stats(state)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, part == .stats || hasNotices(state) ? 12 : 0)
+        .padding(.top, part == .stats ? 12 : hasNotices(state) ? 16 : 0)
     }
 
     private func hasNotices(_ state: AgentState?) -> Bool {
         let store = monitor.agents
         if state?.problem != nil && store.link(project.id, server.id) != nil { return true }
         if store.needsUpdate(project.id, server.id) { return true }
-        return state?.snapshot.map { !issues($0).isEmpty } ?? false
+        return state?.snapshot.map { !issues($0).isEmpty || !securityIssues.isEmpty } ?? false
     }
 
     @ViewBuilder
@@ -171,7 +172,7 @@ struct AgentOverview: View {
             )
         }
         if let snapshot = state?.snapshot {
-            ForEach(Array(issues(snapshot).enumerated()), id: \.offset) { _, issue in issue }
+            ForEach(Array((issues(snapshot) + securityIssues).enumerated()), id: \.offset) { _, issue in issue }
         }
     }
 
@@ -241,6 +242,52 @@ struct AgentOverview: View {
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 9))
     }
 
+    private var securityIssues: [AgentNotice] {
+        guard let result = monitor.visibleSecurity(project, server.id) else { return [] }
+        let show = ("Show", openSecurity)
+        var notices: [AgentNotice] = []
+        if result.onlineChecks {
+            let items = result.items
+            let malware = items.filter { $0.advisory.isMalware }.count
+            if malware > 0 {
+                notices.append(AgentNotice(kind: .problem, text: malware == 1 ? "1 malicious package found." : "\(malware) malicious packages found.", action: show))
+            }
+            let exploited = items.filter { $0.advisory.isExploited }.count
+            if exploited > 0 {
+                notices.append(AgentNotice(
+                    kind: .problem,
+                    text: exploited == 1 ? "1 vulnerability is known to be exploited." : "\(exploited) vulnerabilities are known to be exploited.",
+                    action: show
+                ))
+            }
+            let fixable = items.filter { $0.advisory.hasFix && !$0.advisory.urgent && $0.advisory.severity >= .high }
+            if !fixable.isEmpty {
+                notices.append(AgentNotice(kind: .warning, text: Self.fixableText(fixable), action: show))
+            }
+        }
+        let failing = result.failingChecks
+        if !failing.isEmpty {
+            notices.append(AgentNotice(
+                kind: .warning, text: failing.count == 1 ? failing[0].title : "\(failing.count) hardening checks fail.", action: show
+            ))
+        }
+        let updates = result.pendingSecurityUpdates
+        if updates > 0 {
+            notices.append(AgentNotice(
+                kind: .info, text: updates == 1 ? "1 security update is waiting." : "\(updates) security updates are waiting.", action: show
+            ))
+        }
+        return Array(notices.prefix(2))
+    }
+
+    private static func fixableText(_ items: [SecurityResult.Item]) -> String {
+        let critical = items.filter { $0.advisory.severity == .critical }.count
+        let high = items.count - critical
+        let parts = [(critical, "critical"), (high, "high")].filter { $0.0 > 0 }.map { "\($0.0) \($0.1)" }
+        let noun = items.count == 1 ? "vulnerability has" : "vulnerabilities have"
+        return "\(parts.joined(separator: " and ")) \(noun) a fix."
+    }
+
     private func issues(_ snapshot: AgentSnapshot) -> [AgentNotice] {
         let key = AgentStore.key(project.id, server.id)
         var result: [AgentNotice] = []
@@ -252,7 +299,7 @@ struct AgentOverview: View {
             result.append(AgentNotice(kind: .warning, text: "\(disk.mount) is \(Format.percent(disk.usedFraction * 100)) full.",
                                       collapseKey: "\(key)|full|\(disk.mount)"))
         }
-        for unit in snapshot.system.failedUnits {
+        for unit in snapshot.system.failedServices {
             result.append(AgentNotice(
                 kind: .problem,
                 title: "\(unit) failed",

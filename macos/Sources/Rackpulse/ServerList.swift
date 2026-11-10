@@ -115,46 +115,28 @@ struct FleetHeadline: View {
         let pollers = store.scope.compactMap { monitor.poller($0.id) }
         let loaded = pollers.filter { $0.data.lastUpdated != nil }
         if !loaded.isEmpty {
-            let servers = loaded.flatMap(\.data.servers)
-            let down = servers.filter { $0.status != .running }.count
             let items = monitor.allAlerts
-            let alerts = items.filter { $0.alert.severity > .info }.count
-            let notices = items.count - alerts
-            let worst = items.map(\.alert.severity).max()
-            let healthy = down == 0 && alerts == 0
-            let color = healthy ? (notices > 0 ? Theme.info : Theme.green) : worst.map(Theme.color) ?? Theme.orange
-            if !healthy || !items.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
-                        Image(systemName: healthy ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(healthy ? Theme.green : color)
-                            .symbolEffect(.bounce, value: healthy)
-                        Text(headline(servers: servers.count, down: down, alerts: alerts))
-                            .font(.system(size: 13, weight: .semibold))
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
+            let worst = items.map(\.alert.severity).max() ?? .info
+            let healthy = worst == .info
+            let color = healthy ? Theme.info : Theme.color(worst)
+            if !items.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(expanded ? items : Array(items.prefix(Self.collapsedCount))) { item in
+                        row(item)
                     }
-                    if !items.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(expanded ? items : Array(items.prefix(Self.collapsedCount))) { item in
-                                row(item)
-                            }
-                            if items.count > Self.collapsedCount {
-                                Button(expanded ? "Show less" : "Show \(items.count - Self.collapsedCount) more") {
-                                    var transaction = Transaction(animation: nil)
-                                    transaction.disablesAnimations = true
-                                    withTransaction(transaction) { expanded.toggle() }
-                                }
-                                .buttonStyle(.plain)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Color.accentColor)
-                                .padding(.leading, 23)
-                            }
+                    if items.count > Self.collapsedCount {
+                        Button(expanded ? "Show less" : "Show \(items.count - Self.collapsedCount) more") {
+                            var transaction = Transaction(animation: nil)
+                            transaction.disablesAnimations = true
+                            withTransaction(transaction) { expanded.toggle() }
                         }
-                        .transaction { $0.animation = nil }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.leading, 23)
                     }
                 }
+                .transaction { $0.animation = nil }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .background(color.opacity(healthy ? 0.08 : 0.1), in: RoundedRectangle(cornerRadius: 10))
@@ -169,12 +151,11 @@ struct FleetHeadline: View {
 
     private func row(_ item: ProjectAlert) -> some View {
         let info = item.alert.severity == .info
-        return HStack(alignment: .top, spacing: 8) {
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: info ? "info.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.color(item.alert.severity))
                 .frame(width: 15)
-                .padding(.top, 1)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.alert.title)
                     .font(.system(size: 12, weight: info ? .regular : .semibold))
@@ -201,16 +182,6 @@ struct FleetHeadline: View {
         return store.scope.count == 1 && item.project.id == store.selectedID ? started : "\(item.project.name) · \(started)"
     }
 
-    private func headline(servers: Int, down: Int, alerts: Int) -> String {
-        var parts: [String] = []
-        if down == 0 && alerts == 0 {
-            parts.append(servers == 1 ? "1 server running" : "All \(servers) servers running")
-        } else {
-            if down > 0 { parts.append("\(down) not running") }
-            if alerts > 0 { parts.append("\(alerts) alert\(alerts == 1 ? "" : "s")") }
-        }
-        return parts.joined(separator: " · ")
-    }
 }
 
 struct ProjectHeader: View {

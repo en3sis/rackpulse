@@ -18,6 +18,7 @@ import (
 	"github.com/en3sis/rackpulse/agent/internal/config"
 	"github.com/en3sis/rackpulse/agent/internal/history"
 	"github.com/en3sis/rackpulse/agent/internal/pairing"
+	"github.com/en3sis/rackpulse/agent/internal/security"
 )
 
 func Run(version string) error {
@@ -76,6 +77,8 @@ func Run(version string) error {
 			containers.Record(snapshot.Docker.Containers, snapshot.Time)
 		}
 	})
+	audit := security.New(version, collector)
+	go audit.Run(ctx)
 	go markMinutes(ctx, host)
 	go saveLoop(ctx, host, containers)
 
@@ -85,6 +88,7 @@ func Run(version string) error {
 			token:       cfg.Token,
 			fingerprint: fingerprint,
 			collector:   collector,
+			security:    audit,
 			host:        host,
 			containers:  containers,
 		},

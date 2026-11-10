@@ -17,4 +17,9 @@ if [ -n "${AGENT_URL:-}" ]; then
   grep -q ":-$AGENT_URL}" "$out/install.sh" || { echo "Could not set $AGENT_URL in install.sh"; exit 1; }
 fi
 (cd "$out" && shasum -a 256 rackpulse-agent-linux-amd64 rackpulse-agent-linux-arm64 >SHA256SUMS)
+if [ -n "${AGENT_SIGNING_KEY:-}" ]; then
+  sign_agent "$out"
+else
+  echo "Not signed: AGENT_SIGNING_KEY is not set. install.sh refuses unsigned downloads"
+fi
 ls -l "$out"

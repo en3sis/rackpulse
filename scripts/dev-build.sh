@@ -33,7 +33,7 @@ if [ "$notarize" != 0 ]; then
 fi
 
 for name in "${agent_files[@]}"; do
-  put "$AGENT_OUT/$name" "agent/dev/$name" "$(content_type "$name")" "no-cache"
+  if [ -f "$AGENT_OUT/$name" ]; then put "$AGENT_OUT/$name" "agent/dev/$name" "$(content_type "$name")" "no-cache"; fi
 done
 if [ "$notarize" != 0 ]; then
   put "$DMG" download/dev/Rackpulse-Dev.dmg application/x-apple-diskimage "no-cache"

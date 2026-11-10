@@ -1,0 +1,15 @@
+lockfileVersion: 5.4
+
+specifiers:
+  react-dom: ^18.2.0
+
+packages:
+
+  /@babel/core/7.22.0:
+    resolution: {integrity: sha512-abc}
+
+  /react-dom/18.2.0_react@18.2.0:
+    resolution: {integrity: sha512-ghi}
+
+  /react/18.2.0:
+    resolution: {integrity: sha512-jkl}

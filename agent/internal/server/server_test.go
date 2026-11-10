@@ -22,6 +22,9 @@ func TestRoutingAndAuth(t *testing.T) {
 		{http.MethodGet, "/v1/hello?nonce=ab", "", http.StatusBadRequest},
 		{http.MethodGet, "/v1/history", "", http.StatusUnauthorized},
 		{http.MethodGet, "/v1/snapshot", "rb1_wrong", http.StatusUnauthorized},
+		{http.MethodGet, "/v1/security", "", http.StatusUnauthorized},
+		{http.MethodGet, "/v1/security", "rb1_wrong", http.StatusUnauthorized},
+		{http.MethodPost, "/v1/security", h.token, http.StatusMethodNotAllowed},
 	}
 	for _, c := range cases {
 		request := httptest.NewRequest(c.method, c.path, nil)

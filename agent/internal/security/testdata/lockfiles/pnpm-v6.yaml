@@ -1,0 +1,33 @@
+lockfileVersion: '6.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+dependencies:
+  react-dom:
+    specifier: ^18.2.0
+    version: 18.2.0(react@18.2.0)
+
+packages:
+
+  /@babel/core@7.22.0:
+    resolution: {integrity: sha512-abc}
+    engines: {node: '>=6.9.0'}
+    dev: true
+
+  /js-tokens@4.0.0:
+    resolution: {integrity: sha512-def}
+
+  /react-dom@18.2.0(react@18.2.0):
+    resolution: {integrity: sha512-ghi}
+    peerDependencies:
+      react: ^18.2.0
+    dependencies:
+      loose-envify: 1.4.0
+
+  /react@18.2.0:
+    resolution: {integrity: sha512-jkl}
+
+  '/@types/node@20.10.0':
+    resolution: {integrity: sha512-mno}

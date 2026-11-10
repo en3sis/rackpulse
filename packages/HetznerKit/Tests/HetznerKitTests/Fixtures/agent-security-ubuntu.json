@@ -1,0 +1,1134 @@
+{
+ "version": "0.3.0",
+ "time": 1793051877,
+ "os": {
+  "id": "ubuntu",
+  "versionID": "24.04",
+  "codename": "noble",
+  "name": "Ubuntu 24.04.5 LTS",
+  "like": [
+   "debian"
+  ]
+ },
+ "packages": {
+  "manager": "dpkg",
+  "time": 1793051877,
+  "error": null,
+  "items": [
+   {
+    "name": "adduser",
+    "version": "3.137ubuntu1",
+    "source": "adduser",
+    "sourceVersion": "3.137ubuntu1",
+    "arch": "all"
+   },
+   {
+    "name": "apt",
+    "version": "2.8.3",
+    "source": "apt",
+    "sourceVersion": "2.8.3",
+    "arch": "arm64"
+   },
+   {
+    "name": "base-files",
+    "version": "13ubuntu10.5",
+    "source": "base-files",
+    "sourceVersion": "13ubuntu10.5",
+    "arch": "arm64"
+   },
+   {
+    "name": "base-passwd",
+    "version": "3.6.3build1",
+    "source": "base-passwd",
+    "sourceVersion": "3.6.3build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "bash",
+    "version": "5.2.21-2ubuntu4",
+    "source": "bash",
+    "sourceVersion": "5.2.21-2ubuntu4",
+    "arch": "arm64"
+   },
+   {
+    "name": "bsdutils",
+    "version": "1:2.39.3-9ubuntu6.6",
+    "source": "util-linux",
+    "sourceVersion": "2.39.3-9ubuntu6.6",
+    "arch": "arm64"
+   },
+   {
+    "name": "coreutils",
+    "version": "9.4-3ubuntu6.3",
+    "source": "coreutils",
+    "sourceVersion": "9.4-3ubuntu6.3",
+    "arch": "arm64"
+   },
+   {
+    "name": "dash",
+    "version": "0.5.12-6ubuntu5",
+    "source": "dash",
+    "sourceVersion": "0.5.12-6ubuntu5",
+    "arch": "arm64"
+   },
+   {
+    "name": "debconf",
+    "version": "1.5.86ubuntu1",
+    "source": "debconf",
+    "sourceVersion": "1.5.86ubuntu1",
+    "arch": "all"
+   },
+   {
+    "name": "debianutils",
+    "version": "5.17build1",
+    "source": "debianutils",
+    "sourceVersion": "5.17build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "diffutils",
+    "version": "1:3.10-1ubuntu0.1",
+    "source": "diffutils",
+    "sourceVersion": "1:3.10-1ubuntu0.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "distro-info-data",
+    "version": "2026.10.12-0ubuntu0.24.04.1",
+    "source": "distro-info-data",
+    "sourceVersion": "2026.10.12-0ubuntu0.24.04.1",
+    "arch": "all"
+   },
+   {
+    "name": "dpkg",
+    "version": "1.22.6ubuntu6.6",
+    "source": "dpkg",
+    "sourceVersion": "1.22.6ubuntu6.6",
+    "arch": "arm64"
+   },
+   {
+    "name": "e2fsprogs",
+    "version": "1.47.0-2.4~exp1ubuntu4.1",
+    "source": "e2fsprogs",
+    "sourceVersion": "1.47.0-2.4~exp1ubuntu4.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "findutils",
+    "version": "4.9.0-5build1",
+    "source": "findutils",
+    "sourceVersion": "4.9.0-5build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "gcc-14-base",
+    "version": "14.2.0-4ubuntu2~24.04.1",
+    "source": "gcc-14",
+    "sourceVersion": "14.2.0-4ubuntu2~24.04.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "gpgv",
+    "version": "2.4.4-2ubuntu17.6",
+    "source": "gnupg2",
+    "sourceVersion": "2.4.4-2ubuntu17.6",
+    "arch": "arm64"
+   },
+   {
+    "name": "grep",
+    "version": "3.11-4build1",
+    "source": "grep",
+    "sourceVersion": "3.11-4build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "gzip",
+    "version": "1.12-1ubuntu3.2",
+    "source": "gzip",
+    "sourceVersion": "1.12-1ubuntu3.2",
+    "arch": "arm64"
+   },
+   {
+    "name": "hostname",
+    "version": "3.23+nmu2ubuntu2",
+    "source": "hostname",
+    "sourceVersion": "3.23+nmu2ubuntu2",
+    "arch": "arm64"
+   },
+   {
+    "name": "init-system-helpers",
+    "version": "1.66ubuntu1",
+    "source": "init-system-helpers",
+    "sourceVersion": "1.66ubuntu1",
+    "arch": "all"
+   },
+   {
+    "name": "iptables",
+    "version": "1.8.10-3ubuntu2",
+    "source": "iptables",
+    "sourceVersion": "1.8.10-3ubuntu2",
+    "arch": "arm64"
+   },
+   {
+    "name": "libacl1",
+    "version": "2.3.2-1build1.1",
+    "source": "acl",
+    "sourceVersion": "2.3.2-1build1.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libapt-pkg6.0t64",
+    "version": "2.8.3",
+    "source": "apt",
+    "sourceVersion": "2.8.3",
+    "arch": "arm64"
+   },
+   {
+    "name": "libassuan0",
+    "version": "2.5.6-1build1",
+    "source": "libassuan",
+    "sourceVersion": "2.5.6-1build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libattr1",
+    "version": "1:2.5.2-1ubuntu0.1",
+    "source": "attr",
+    "sourceVersion": "1:2.5.2-1ubuntu0.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libaudit-common",
+    "version": "1:3.1.2-2.1ubuntu0.1",
+    "source": "audit",
+    "sourceVersion": "1:3.1.2-2.1ubuntu0.1",
+    "arch": "all"
+   },
+   {
+    "name": "libaudit1",
+    "version": "1:3.1.2-2.1ubuntu0.1",
+    "source": "audit",
+    "sourceVersion": "1:3.1.2-2.1ubuntu0.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libblkid1",
+    "version": "2.39.3-9ubuntu6.6",
+    "source": "util-linux",
+    "sourceVersion": "2.39.3-9ubuntu6.6",
+    "arch": "arm64"
+   },
+   {
+    "name": "libbsd0",
+    "version": "0.12.1-1build1.1",
+    "source": "libbsd",
+    "sourceVersion": "0.12.1-1build1.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libbz2-1.0",
+    "version": "1.0.8-5.1ubuntu0.1",
+    "source": "bzip2",
+    "sourceVersion": "1.0.8-5.1ubuntu0.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libc-bin",
+    "version": "2.39-0ubuntu8.9",
+    "source": "glibc",
+    "sourceVersion": "2.39-0ubuntu8.9",
+    "arch": "arm64"
+   },
+   {
+    "name": "libc6",
+    "version": "2.39-0ubuntu8.9",
+    "source": "glibc",
+    "sourceVersion": "2.39-0ubuntu8.9",
+    "arch": "arm64"
+   },
+   {
+    "name": "libcap-ng0",
+    "version": "0.8.4-2build2",
+    "source": "libcap-ng",
+    "sourceVersion": "0.8.4-2build2",
+    "arch": "arm64"
+   },
+   {
+    "name": "libcap2",
+    "version": "1:2.66-5ubuntu2.4",
+    "source": "libcap2",
+    "sourceVersion": "1:2.66-5ubuntu2.4",
+    "arch": "arm64"
+   },
+   {
+    "name": "libcbor0.10",
+    "version": "0.10.2-1.2ubuntu2",
+    "source": "libcbor",
+    "sourceVersion": "0.10.2-1.2ubuntu2",
+    "arch": "arm64"
+   },
+   {
+    "name": "libcom-err2",
+    "version": "1.47.0-2.4~exp1ubuntu4.1",
+    "source": "e2fsprogs",
+    "sourceVersion": "1.47.0-2.4~exp1ubuntu4.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libcrypt1",
+    "version": "1:4.4.36-4build1",
+    "source": "libxcrypt",
+    "sourceVersion": "1:4.4.36-4build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libdb5.3t64",
+    "version": "5.3.28+dfsg2-7",
+    "source": "db5.3",
+    "sourceVersion": "5.3.28+dfsg2-7",
+    "arch": "arm64"
+   },
+   {
+    "name": "libdbus-1-3",
+    "version": "1.14.10-4ubuntu4.1",
+    "source": "dbus",
+    "sourceVersion": "1.14.10-4ubuntu4.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libdebconfclient0",
+    "version": "0.271ubuntu3",
+    "source": "cdebconf",
+    "sourceVersion": "0.271ubuntu3",
+    "arch": "arm64"
+   },
+   {
+    "name": "libedit2",
+    "version": "3.1-20230828-1build1",
+    "source": "libedit",
+    "sourceVersion": "3.1-20230828-1build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libexpat1",
+    "version": "2.6.1-2ubuntu0.6",
+    "source": "expat",
+    "sourceVersion": "2.6.1-2ubuntu0.6",
+    "arch": "arm64"
+   },
+   {
+    "name": "libext2fs2t64",
+    "version": "1.47.0-2.4~exp1ubuntu4.1",
+    "source": "e2fsprogs",
+    "sourceVersion": "1.47.0-2.4~exp1ubuntu4.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libffi8",
+    "version": "3.4.6-1build1",
+    "source": "libffi",
+    "sourceVersion": "3.4.6-1build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libfido2-1",
+    "version": "1.14.0-1build3",
+    "source": "libfido2",
+    "sourceVersion": "1.14.0-1build3",
+    "arch": "arm64"
+   },
+   {
+    "name": "libgcc-s1",
+    "version": "14.2.0-4ubuntu2~24.04.1",
+    "source": "gcc-14",
+    "sourceVersion": "14.2.0-4ubuntu2~24.04.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libgcrypt20",
+    "version": "1.10.3-2ubuntu0.2",
+    "source": "libgcrypt20",
+    "sourceVersion": "1.10.3-2ubuntu0.2",
+    "arch": "arm64"
+   },
+   {
+    "name": "libglib2.0-0t64",
+    "version": "2.80.0-6ubuntu3.10",
+    "source": "glib2.0",
+    "sourceVersion": "2.80.0-6ubuntu3.10",
+    "arch": "arm64"
+   },
+   {
+    "name": "libgmp10",
+    "version": "2:6.3.0+dfsg-2ubuntu6.1",
+    "source": "gmp",
+    "sourceVersion": "2:6.3.0+dfsg-2ubuntu6.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libgnutls30t64",
+    "version": "3.8.3-1.1ubuntu3.6",
+    "source": "gnutls28",
+    "sourceVersion": "3.8.3-1.1ubuntu3.6",
+    "arch": "arm64"
+   },
+   {
+    "name": "libgpg-error0",
+    "version": "1.47-3build2.1",
+    "source": "libgpg-error",
+    "sourceVersion": "1.47-3build2.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libgssapi-krb5-2",
+    "version": "1.20.1-6ubuntu2.10",
+    "source": "krb5",
+    "sourceVersion": "1.20.1-6ubuntu2.10",
+    "arch": "arm64"
+   },
+   {
+    "name": "libhogweed6t64",
+    "version": "3.9.1-2.2build1.1",
+    "source": "nettle",
+    "sourceVersion": "3.9.1-2.2build1.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libidn2-0",
+    "version": "2.3.7-2build1.1",
+    "source": "libidn2",
+    "sourceVersion": "2.3.7-2build1.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libip4tc2",
+    "version": "1.8.10-3ubuntu2",
+    "source": "iptables",
+    "sourceVersion": "1.8.10-3ubuntu2",
+    "arch": "arm64"
+   },
+   {
+    "name": "libip6tc2",
+    "version": "1.8.10-3ubuntu2",
+    "source": "iptables",
+    "sourceVersion": "1.8.10-3ubuntu2",
+    "arch": "arm64"
+   },
+   {
+    "name": "libk5crypto3",
+    "version": "1.20.1-6ubuntu2.10",
+    "source": "krb5",
+    "sourceVersion": "1.20.1-6ubuntu2.10",
+    "arch": "arm64"
+   },
+   {
+    "name": "libkeyutils1",
+    "version": "1.6.3-3build1",
+    "source": "keyutils",
+    "sourceVersion": "1.6.3-3build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libkrb5-3",
+    "version": "1.20.1-6ubuntu2.10",
+    "source": "krb5",
+    "sourceVersion": "1.20.1-6ubuntu2.10",
+    "arch": "arm64"
+   },
+   {
+    "name": "libkrb5support0",
+    "version": "1.20.1-6ubuntu2.10",
+    "source": "krb5",
+    "sourceVersion": "1.20.1-6ubuntu2.10",
+    "arch": "arm64"
+   },
+   {
+    "name": "liblz4-1",
+    "version": "1.9.4-1build1.1",
+    "source": "lz4",
+    "sourceVersion": "1.9.4-1build1.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "liblzma5",
+    "version": "5.6.1+really5.4.5-1ubuntu0.4",
+    "source": "xz-utils",
+    "sourceVersion": "5.6.1+really5.4.5-1ubuntu0.4",
+    "arch": "arm64"
+   },
+   {
+    "name": "libmd0",
+    "version": "1.1.0-2build1.1",
+    "source": "libmd",
+    "sourceVersion": "1.1.0-2build1.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libmnl0",
+    "version": "1.0.5-2build1",
+    "source": "libmnl",
+    "sourceVersion": "1.0.5-2build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libmount1",
+    "version": "2.39.3-9ubuntu6.6",
+    "source": "util-linux",
+    "sourceVersion": "2.39.3-9ubuntu6.6",
+    "arch": "arm64"
+   },
+   {
+    "name": "libncursesw6",
+    "version": "6.4+20240113-1ubuntu2.2",
+    "source": "ncurses",
+    "sourceVersion": "6.4+20240113-1ubuntu2.2",
+    "arch": "arm64"
+   },
+   {
+    "name": "libnetfilter-conntrack3",
+    "version": "1.0.9-6build1",
+    "source": "libnetfilter-conntrack",
+    "sourceVersion": "1.0.9-6build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libnettle8t64",
+    "version": "3.9.1-2.2build1.1",
+    "source": "nettle",
+    "sourceVersion": "3.9.1-2.2build1.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libnfnetlink0",
+    "version": "1.0.2-2build1",
+    "source": "libnfnetlink",
+    "sourceVersion": "1.0.2-2build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libnftnl11",
+    "version": "1.2.6-2build1",
+    "source": "libnftnl",
+    "sourceVersion": "1.2.6-2build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libnpth0t64",
+    "version": "1.6-3.1build1",
+    "source": "npth",
+    "sourceVersion": "1.6-3.1build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libp11-kit0",
+    "version": "0.25.3-4ubuntu2.2",
+    "source": "p11-kit",
+    "sourceVersion": "0.25.3-4ubuntu2.2",
+    "arch": "arm64"
+   },
+   {
+    "name": "libpam-modules",
+    "version": "1.5.3-5ubuntu5.7",
+    "source": "pam",
+    "sourceVersion": "1.5.3-5ubuntu5.7",
+    "arch": "arm64"
+   },
+   {
+    "name": "libpam-modules-bin",
+    "version": "1.5.3-5ubuntu5.7",
+    "source": "pam",
+    "sourceVersion": "1.5.3-5ubuntu5.7",
+    "arch": "arm64"
+   },
+   {
+    "name": "libpam-runtime",
+    "version": "1.5.3-5ubuntu5.7",
+    "source": "pam",
+    "sourceVersion": "1.5.3-5ubuntu5.7",
+    "arch": "all"
+   },
+   {
+    "name": "libpam0g",
+    "version": "1.5.3-5ubuntu5.7",
+    "source": "pam",
+    "sourceVersion": "1.5.3-5ubuntu5.7",
+    "arch": "arm64"
+   },
+   {
+    "name": "libpcre2-8-0",
+    "version": "10.42-4ubuntu2.1",
+    "source": "pcre2",
+    "sourceVersion": "10.42-4ubuntu2.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libproc2-0",
+    "version": "2:4.0.4-4ubuntu3.3",
+    "source": "procps",
+    "sourceVersion": "2:4.0.4-4ubuntu3.3",
+    "arch": "arm64"
+   },
+   {
+    "name": "libpython3-stdlib",
+    "version": "3.12.3-0ubuntu2.1",
+    "source": "python3-defaults",
+    "sourceVersion": "3.12.3-0ubuntu2.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libpython3.12-minimal",
+    "version": "3.12.3-1ubuntu0.17",
+    "source": "python3.12",
+    "sourceVersion": "3.12.3-1ubuntu0.17",
+    "arch": "arm64"
+   },
+   {
+    "name": "libpython3.12-stdlib",
+    "version": "3.12.3-1ubuntu0.17",
+    "source": "python3.12",
+    "sourceVersion": "3.12.3-1ubuntu0.17",
+    "arch": "arm64"
+   },
+   {
+    "name": "libreadline8t64",
+    "version": "8.2-4build1",
+    "source": "readline",
+    "sourceVersion": "8.2-4build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libseccomp2",
+    "version": "2.5.5-1ubuntu3.1",
+    "source": "libseccomp",
+    "sourceVersion": "2.5.5-1ubuntu3.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libselinux1",
+    "version": "3.5-2ubuntu2.1",
+    "source": "libselinux",
+    "sourceVersion": "3.5-2ubuntu2.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libsemanage-common",
+    "version": "3.5-1build5",
+    "source": "libsemanage",
+    "sourceVersion": "3.5-1build5",
+    "arch": "all"
+   },
+   {
+    "name": "libsemanage2",
+    "version": "3.5-1build5",
+    "source": "libsemanage",
+    "sourceVersion": "3.5-1build5",
+    "arch": "arm64"
+   },
+   {
+    "name": "libsepol2",
+    "version": "3.5-2build1",
+    "source": "libsepol",
+    "sourceVersion": "3.5-2build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libsmartcols1",
+    "version": "2.39.3-9ubuntu6.6",
+    "source": "util-linux",
+    "sourceVersion": "2.39.3-9ubuntu6.6",
+    "arch": "arm64"
+   },
+   {
+    "name": "libsqlite3-0",
+    "version": "3.45.1-1ubuntu2.8",
+    "source": "sqlite3",
+    "sourceVersion": "3.45.1-1ubuntu2.8",
+    "arch": "arm64"
+   },
+   {
+    "name": "libss2",
+    "version": "1.47.0-2.4~exp1ubuntu4.1",
+    "source": "e2fsprogs",
+    "sourceVersion": "1.47.0-2.4~exp1ubuntu4.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libssl3t64",
+    "version": "3.0.13-0ubuntu3.16",
+    "source": "openssl",
+    "sourceVersion": "3.0.13-0ubuntu3.16",
+    "arch": "arm64"
+   },
+   {
+    "name": "libstdc++6",
+    "version": "14.2.0-4ubuntu2~24.04.1",
+    "source": "gcc-14",
+    "sourceVersion": "14.2.0-4ubuntu2~24.04.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libsystemd0",
+    "version": "255.4-1ubuntu8.17",
+    "source": "systemd",
+    "sourceVersion": "255.4-1ubuntu8.17",
+    "arch": "arm64"
+   },
+   {
+    "name": "libtasn1-6",
+    "version": "4.19.0-3ubuntu0.24.04.2",
+    "source": "libtasn1-6",
+    "sourceVersion": "4.19.0-3ubuntu0.24.04.2",
+    "arch": "arm64"
+   },
+   {
+    "name": "libtinfo6",
+    "version": "6.4+20240113-1ubuntu2.2",
+    "source": "ncurses",
+    "sourceVersion": "6.4+20240113-1ubuntu2.2",
+    "arch": "arm64"
+   },
+   {
+    "name": "libudev1",
+    "version": "255.4-1ubuntu8.17",
+    "source": "systemd",
+    "sourceVersion": "255.4-1ubuntu8.17",
+    "arch": "arm64"
+   },
+   {
+    "name": "libunistring5",
+    "version": "1.1-2build1.1",
+    "source": "libunistring",
+    "sourceVersion": "1.1-2build1.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libuuid1",
+    "version": "2.39.3-9ubuntu6.6",
+    "source": "util-linux",
+    "sourceVersion": "2.39.3-9ubuntu6.6",
+    "arch": "arm64"
+   },
+   {
+    "name": "libwrap0",
+    "version": "7.6.q-33",
+    "source": "tcp-wrappers",
+    "sourceVersion": "7.6.q-33",
+    "arch": "arm64"
+   },
+   {
+    "name": "libxtables12",
+    "version": "1.8.10-3ubuntu2",
+    "source": "iptables",
+    "sourceVersion": "1.8.10-3ubuntu2",
+    "arch": "arm64"
+   },
+   {
+    "name": "libxxhash0",
+    "version": "0.8.2-2build1",
+    "source": "xxhash",
+    "sourceVersion": "0.8.2-2build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "libzstd1",
+    "version": "1.5.5+dfsg2-2build1.1",
+    "source": "libzstd",
+    "sourceVersion": "1.5.5+dfsg2-2build1.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "login",
+    "version": "1:4.13+dfsg1-4ubuntu3.2",
+    "source": "shadow",
+    "sourceVersion": "1:4.13+dfsg1-4ubuntu3.2",
+    "arch": "arm64"
+   },
+   {
+    "name": "logsave",
+    "version": "1.47.0-2.4~exp1ubuntu4.1",
+    "source": "e2fsprogs",
+    "sourceVersion": "1.47.0-2.4~exp1ubuntu4.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "lsb-release",
+    "version": "12.0-2",
+    "source": "lsb-release-minimal",
+    "sourceVersion": "12.0-2",
+    "arch": "all"
+   },
+   {
+    "name": "mawk",
+    "version": "1.3.4.20240123-1build1",
+    "source": "mawk",
+    "sourceVersion": "1.3.4.20240123-1build1",
+    "arch": "arm64"
+   },
+   {
+    "name": "media-types",
+    "version": "10.1.0",
+    "source": "media-types",
+    "sourceVersion": "10.1.0",
+    "arch": "all"
+   },
+   {
+    "name": "mount",
+    "version": "2.39.3-9ubuntu6.6",
+    "source": "util-linux",
+    "sourceVersion": "2.39.3-9ubuntu6.6",
+    "arch": "arm64"
+   },
+   {
+    "name": "ncurses-base",
+    "version": "6.4+20240113-1ubuntu2.2",
+    "source": "ncurses",
+    "sourceVersion": "6.4+20240113-1ubuntu2.2",
+    "arch": "all"
+   },
+   {
+    "name": "ncurses-bin",
+    "version": "6.4+20240113-1ubuntu2.2",
+    "source": "ncurses",
+    "sourceVersion": "6.4+20240113-1ubuntu2.2",
+    "arch": "arm64"
+   },
+   {
+    "name": "netbase",
+    "version": "6.4",
+    "source": "netbase",
+    "sourceVersion": "6.4",
+    "arch": "all"
+   },
+   {
+    "name": "openssh-client",
+    "version": "1:9.6p1-3ubuntu13.20",
+    "source": "openssh",
+    "sourceVersion": "1:9.6p1-3ubuntu13.20",
+    "arch": "arm64"
+   },
+   {
+    "name": "openssh-server",
+    "version": "1:9.6p1-3ubuntu13.20",
+    "source": "openssh",
+    "sourceVersion": "1:9.6p1-3ubuntu13.20",
+    "arch": "arm64"
+   },
+   {
+    "name": "openssh-sftp-server",
+    "version": "1:9.6p1-3ubuntu13.20",
+    "source": "openssh",
+    "sourceVersion": "1:9.6p1-3ubuntu13.20",
+    "arch": "arm64"
+   },
+   {
+    "name": "passwd",
+    "version": "1:4.13+dfsg1-4ubuntu3.2",
+    "source": "shadow",
+    "sourceVersion": "1:4.13+dfsg1-4ubuntu3.2",
+    "arch": "arm64"
+   },
+   {
+    "name": "perl-base",
+    "version": "5.38.2-3.2ubuntu0.6",
+    "source": "perl",
+    "sourceVersion": "5.38.2-3.2ubuntu0.6",
+    "arch": "arm64"
+   },
+   {
+    "name": "procps",
+    "version": "2:4.0.4-4ubuntu3.3",
+    "source": "procps",
+    "sourceVersion": "2:4.0.4-4ubuntu3.3",
+    "arch": "arm64"
+   },
+   {
+    "name": "python-apt-common",
+    "version": "2.7.7ubuntu5.3",
+    "source": "python-apt",
+    "sourceVersion": "2.7.7ubuntu5.3",
+    "arch": "all"
+   },
+   {
+    "name": "python3",
+    "version": "3.12.3-0ubuntu2.1",
+    "source": "python3-defaults",
+    "sourceVersion": "3.12.3-0ubuntu2.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "python3-apt",
+    "version": "2.7.7ubuntu5.3",
+    "source": "python-apt",
+    "sourceVersion": "2.7.7ubuntu5.3",
+    "arch": "arm64"
+   },
+   {
+    "name": "python3-dbus",
+    "version": "1.3.2-5build3",
+    "source": "dbus-python",
+    "sourceVersion": "1.3.2-5build3",
+    "arch": "arm64"
+   },
+   {
+    "name": "python3-distro-info",
+    "version": "1.7build1",
+    "source": "distro-info",
+    "sourceVersion": "1.7build1",
+    "arch": "all"
+   },
+   {
+    "name": "python3-minimal",
+    "version": "3.12.3-0ubuntu2.1",
+    "source": "python3-defaults",
+    "sourceVersion": "3.12.3-0ubuntu2.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "python3.12",
+    "version": "3.12.3-1ubuntu0.17",
+    "source": "python3.12",
+    "sourceVersion": "3.12.3-1ubuntu0.17",
+    "arch": "arm64"
+   },
+   {
+    "name": "python3.12-minimal",
+    "version": "3.12.3-1ubuntu0.17",
+    "source": "python3.12",
+    "sourceVersion": "3.12.3-1ubuntu0.17",
+    "arch": "arm64"
+   },
+   {
+    "name": "readline-common",
+    "version": "8.2-4build1",
+    "source": "readline",
+    "sourceVersion": "8.2-4build1",
+    "arch": "all"
+   },
+   {
+    "name": "sed",
+    "version": "4.9-2ubuntu0.24.04.1",
+    "source": "sed",
+    "sourceVersion": "4.9-2ubuntu0.24.04.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "sensible-utils",
+    "version": "0.0.22",
+    "source": "sensible-utils",
+    "sourceVersion": "0.0.22",
+    "arch": "all"
+   },
+   {
+    "name": "sysvinit-utils",
+    "version": "3.08-6ubuntu3",
+    "source": "sysvinit",
+    "sourceVersion": "3.08-6ubuntu3",
+    "arch": "arm64"
+   },
+   {
+    "name": "tar",
+    "version": "1.35+dfsg-3ubuntu0.4",
+    "source": "tar",
+    "sourceVersion": "1.35+dfsg-3ubuntu0.4",
+    "arch": "arm64"
+   },
+   {
+    "name": "tzdata",
+    "version": "2026e-0ubuntu0.24.04.1",
+    "source": "tzdata",
+    "sourceVersion": "2026e-0ubuntu0.24.04.1",
+    "arch": "all"
+   },
+   {
+    "name": "ubuntu-keyring",
+    "version": "2023.11.28.1",
+    "source": "ubuntu-keyring",
+    "sourceVersion": "2023.11.28.1",
+    "arch": "all"
+   },
+   {
+    "name": "ucf",
+    "version": "3.0043+nmu1",
+    "source": "ucf",
+    "sourceVersion": "3.0043+nmu1",
+    "arch": "all"
+   },
+   {
+    "name": "ufw",
+    "version": "0.36.2-6",
+    "source": "ufw",
+    "sourceVersion": "0.36.2-6",
+    "arch": "all"
+   },
+   {
+    "name": "unattended-upgrades",
+    "version": "2.9.1+nmu4ubuntu1",
+    "source": "unattended-upgrades",
+    "sourceVersion": "2.9.1+nmu4ubuntu1",
+    "arch": "all"
+   },
+   {
+    "name": "unminimize",
+    "version": "0.2.1",
+    "source": "unminimize",
+    "sourceVersion": "0.2.1",
+    "arch": "arm64"
+   },
+   {
+    "name": "util-linux",
+    "version": "2.39.3-9ubuntu6.6",
+    "source": "util-linux",
+    "sourceVersion": "2.39.3-9ubuntu6.6",
+    "arch": "arm64"
+   },
+   {
+    "name": "xz-utils",
+    "version": "5.6.1+really5.4.5-1ubuntu0.4",
+    "source": "xz-utils",
+    "sourceVersion": "5.6.1+really5.4.5-1ubuntu0.4",
+    "arch": "arm64"
+   },
+   {
+    "name": "zlib1g",
+    "version": "1:1.3.dfsg-3.1ubuntu2.2",
+    "source": "zlib",
+    "sourceVersion": "1:1.3.dfsg-3.1ubuntu2.2",
+    "arch": "arm64"
+   }
+  ]
+ },
+ "updates": {
+  "time": 1793051877,
+  "listsTime": 1793039611,
+  "error": null,
+  "items": [
+   {
+    "name": "libsystemd0",
+    "current": "255.4-1ubuntu8.17",
+    "available": "255.4-1ubuntu8.18",
+    "security": true,
+    "origins": [
+     "Ubuntu:24.04/noble-updates",
+     "Ubuntu:24.04/noble-security"
+    ]
+   },
+   {
+    "name": "libudev1",
+    "current": "255.4-1ubuntu8.17",
+    "available": "255.4-1ubuntu8.18",
+    "security": true,
+    "origins": [
+     "Ubuntu:24.04/noble-updates",
+     "Ubuntu:24.04/noble-security"
+    ]
+   },
+   {
+    "name": "zlib1g",
+    "current": "1:1.3.dfsg-3.1ubuntu2.2",
+    "available": "1:1.3.dfsg-3.1ubuntu2.3",
+    "security": true,
+    "origins": [
+     "Ubuntu:24.04/noble-updates",
+     "Ubuntu:24.04/noble-security"
+    ]
+   }
+  ]
+ },
+ "kernel": {
+  "running": "7.2.12-orbstack-00394-gbecdd6130068",
+  "latestInstalled": null
+ },
+ "checks": [
+  {
+   "id": "ssh.passwordLogin",
+   "status": "unknown",
+   "title": "SSH password login could not be checked",
+   "detail": "Cannot read /etc/ssh/sshd_config.d/50-cloud-init.conf",
+   "source": "/etc/ssh/sshd_config.d/50-cloud-init.conf"
+  },
+  {
+   "id": "ssh.rootLogin",
+   "status": "unknown",
+   "title": "SSH root login could not be checked",
+   "detail": "Cannot read /etc/ssh/sshd_config.d/50-cloud-init.conf",
+   "source": "/etc/ssh/sshd_config.d/50-cloud-init.conf"
+  },
+  {
+   "id": "updates.automatic",
+   "status": "fail",
+   "title": "Automatic security updates are off",
+   "detail": "APT::Periodic::Enable \"0\"",
+   "source": "/etc/apt/apt.conf.d/docker-disable-periodic-update"
+  },
+  {
+   "id": "firewall.ufw",
+   "status": "fail",
+   "title": "ufw firewall is off",
+   "detail": "ENABLED=no",
+   "source": "/etc/ufw/ufw.conf"
+  },
+  {
+   "id": "users.extraRoot",
+   "status": "pass",
+   "title": "Only root has UID 0",
+   "detail": "No other account has UID 0",
+   "source": "/etc/passwd"
+  },
+  {
+   "id": "docker.privileged",
+   "status": "fail",
+   "title": "A privileged container is running",
+   "detail": "rp-sec-dummy",
+   "source": null
+  },
+  {
+   "id": "docker.socketMount",
+   "status": "fail",
+   "title": "A container mounts the Docker socket",
+   "detail": "rp-sec-noble",
+   "source": null
+  },
+  {
+   "id": "docker.hostNetwork",
+   "status": "fail",
+   "title": "A container uses the host network",
+   "detail": "rp-sec-dummy",
+   "source": null
+  }
+ ],
+ "listening": [
+  {
+   "protocol": "tcp",
+   "address": "::",
+   "port": 7311
+  }
+ ],
+ "projects": [
+  {
+   "name": "demo",
+   "path": "/srv/app",
+   "error": null,
+   "lockfiles": [
+    {
+     "path": "web/package-lock.json",
+     "ecosystem": "npm",
+     "packages": [
+      {
+       "name": "debug",
+       "version": "2.6.9"
+      },
+      {
+       "name": "express",
+       "version": "4.17.1"
+      },
+      {
+       "name": "lodash",
+       "version": "4.17.20"
+      }
+     ],
+     "truncated": false
+    }
+   ]
+  }
+ ]
+}

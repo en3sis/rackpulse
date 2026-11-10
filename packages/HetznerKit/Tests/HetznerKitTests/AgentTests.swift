@@ -55,6 +55,13 @@ struct AgentTests {
         #expect(old.metrics(cores: 4) == nil)
     }
 
+    @Test func failedServicesSkipLoginSessions() {
+        let system = AgentSnapshot.System(
+            rebootRequired: false, failedUnits: ["session-c1.scope", "session-42.scope", "nginx.service", "docker-abc.scope"]
+        )
+        #expect(system.failedServices == ["nginx.service", "docker-abc.scope"])
+    }
+
     @Test func decodesTailscaleNameAndAddress() throws {
         let json = #"{"hostname":"web-1","os":"","kernel":"","arch":"","serverID":null,"bootTime":1758000000,"cores":2,"load":[],"tailscale":{"name":"web-1.tail0000.ts.net","ip":"100.64.0.7"}}"#
         let host = try AgentJSON.decoder().decode(AgentSnapshot.Host.self, from: Data(json.utf8))

@@ -1,0 +1,17 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Calculating upgrade...
+The following packages will be upgraded:
+  liblzma5 libssl3t64 vim-common
+The following NEW packages will be installed:
+  linux-image-6.8.0-90-generic
+3 upgraded, 1 newly installed, 0 to remove and 0 not upgraded.
+Inst liblzma5 [5.6.1+really5.4.5-1ubuntu0.3] (5.6.1+really5.4.5-1ubuntu0.4 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Inst libssl3t64:arm64 [3.0.13-0ubuntu3.4] (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-security [arm64])
+Inst vim-common [2:9.1.0016-1ubuntu7.2] (2:9.1.0016-1ubuntu7.3 Ubuntu:24.04/noble-updates [all])
+Inst linux-image-6.8.0-90-generic (6.8.0-90.91 Ubuntu:24.04/noble-updates [arm64])
+Inst docker-ce [5:27.3.1-1~ubuntu.24.04~noble] (5:28.0.1-1~ubuntu.24.04~noble Docker CE:noble/noble [arm64])
+Conf liblzma5 (5.6.1+really5.4.5-1ubuntu0.4 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf libssl3t64:arm64 (3.0.13-0ubuntu3.5 Ubuntu:24.04/noble-security [arm64])
+Conf vim-common (2:9.1.0016-1ubuntu7.3 Ubuntu:24.04/noble-updates [all])

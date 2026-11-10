@@ -10,6 +10,7 @@ enum Theme {
     static let secondary = Color.secondary
     static let green = Color(nsColor: .systemGreen)
     static let orange = Color(nsColor: .systemOrange)
+    static let yellow = Color(nsColor: .systemYellow)
     static let red = Color(nsColor: .systemRed)
     static let off = Color(nsColor: .systemGray)
     static let info = Color(nsColor: .systemBlue)

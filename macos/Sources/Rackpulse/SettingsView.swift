@@ -5,6 +5,7 @@ import SwiftUI
 enum SettingsPage: Hashable {
     case general
     case alerts
+    case security
     case about
     case project(UUID)
 }
@@ -30,6 +31,7 @@ struct SettingsView: View {
         switch page {
         case .general: "General"
         case .alerts: "Alerts"
+        case .security: "Security"
         case .about: "About"
         case .project: selectedProject?.name ?? "Settings"
         case nil: "Settings"
@@ -41,6 +43,7 @@ struct SettingsView: View {
             List(selection: $page) {
                 Label("General", systemImage: "gearshape").tag(SettingsPage.general)
                 Label("Alerts", systemImage: "bell.badge").tag(SettingsPage.alerts)
+                Label("Security", systemImage: "checkmark.shield").tag(SettingsPage.security)
                 Label("About", systemImage: "info.circle").tag(SettingsPage.about)
                 Section("Projects") {
                     ForEach(store.projects) { project in
@@ -75,6 +78,8 @@ struct SettingsView: View {
                 GeneralPage(monitor: monitor, settings: settings)
             case .alerts:
                 AlertsPage(monitor: monitor, settings: settings)
+            case .security:
+                SecurityPage(monitor: monitor, settings: settings)
             case .about:
                 AboutPage(updates: updates)
             case .project(let id):
@@ -374,12 +379,188 @@ private struct AlertsPage: View {
     }
 }
 
+private struct SecurityPage: View {
+    let monitor: Monitor
+    let settings: SettingsStore
+
+    @State private var token = ""
+    @State private var organization: String
+    @State private var confirmingRemove = false
+    @State private var confirmingClear = false
+    @State private var verifying = false
+    @State private var verification: SocketCheck?
+    @State private var saveFailed = false
+
+    init(monitor: Monitor, settings: SettingsStore) {
+        self.monitor = monitor
+        self.settings = settings
+        _organization = State(initialValue: settings.value.socketOrganization)
+    }
+
+    var body: some View {
+        let security = monitor.security
+        let online = settings.value.security.onlineChecks
+        Form {
+            Section {
+                Toggle("Check packages for known vulnerabilities", isOn: Binding(
+                    get: { settings.value.security.onlineChecks },
+                    set: { settings.value.security.onlineChecks = $0; monitor.scheduleSecurity() }
+                ))
+                Toggle("Add exploit data from CISA and FIRST", isOn: Binding(
+                    get: { settings.value.security.enrichment },
+                    set: { settings.value.security.enrichment = $0; monitor.scheduleSecurity() }
+                ))
+                .disabled(!online)
+            } header: {
+                Text("Vulnerability checks")
+            } footer: {
+                Text("Rackpulse sends package names and versions to OSV.dev (Google). Exploit data is downloaded as full lists from CISA and FIRST (epss.empiricalsecurity.com), so CVE ids stay on this Mac. It never sends server names, IP addresses or file paths. Hardening checks and pending updates work without this.")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                if security.hasSocketToken {
+                    LabeledContent("API token") {
+                        HStack(spacing: 8) {
+                            Text("Saved in Keychain").foregroundStyle(.secondary)
+                            if !confirmingRemove {
+                                Button("Remove") { confirmingRemove = true }
+                            }
+                        }
+                    }
+                    if confirmingRemove {
+                        HStack {
+                            Text("Remove the Socket token from the Keychain?")
+                            Spacer()
+                            Button("Cancel") { confirmingRemove = false }
+                            Button("Remove", role: .destructive) {
+                                confirmingRemove = false
+                                verification = nil
+                                security.removeSocketToken()
+                                monitor.scheduleSecurity()
+                            }
+                        }
+                    }
+                } else {
+                    SecureField("API token", text: $token, prompt: Text("Paste a Socket API token"))
+                }
+                TextField("Organization slug", text: $organization, prompt: Text("your-org"))
+                    .onSubmit(save)
+                HStack(spacing: 8) {
+                    Button("Verify", action: verify)
+                        .disabled(verifying || (token.isEmpty && !security.hasSocketToken))
+                    Button("Save", action: save)
+                        .disabled(!hasChanges)
+                    if verifying { ProgressView().controlSize(.small) }
+                    Spacer()
+                    if let verification {
+                        switch verification {
+                        case .quota(let quota):
+                            Text("Works. \(quota.callsLeft) \(quota.callsLeft == 1 ? "check" : "checks") left this hour.")
+                                .foregroundStyle(Theme.green)
+                        case .failed(let message):
+                            Text(message).foregroundStyle(Theme.red)
+                        }
+                    } else if saveFailed {
+                        Text("The token could not be saved to the Keychain.").foregroundStyle(Theme.red)
+                    }
+                }
+            } header: {
+                Text("Socket.dev")
+            } footer: {
+                Text("Optional. Checks app dependencies for malware and typosquatting. Needs a Socket API token with packages:list and your organization slug. The free plan allows about 5 checks per hour.")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                if let latest = security.latest, latest.onlineChecks {
+                    ForEach(latest.sources) { status in
+                        LabeledContent(status.source.title) {
+                            Text(Self.statusText(status))
+                                .foregroundStyle(status.state == .failed ? Theme.orange : .secondary)
+                                .multilineTextAlignment(.trailing)
+                        }
+                    }
+                } else {
+                    Text(online ? "No online check has run yet." : "Online checks are off.").foregroundStyle(.secondary)
+                }
+                if confirmingClear {
+                    HStack {
+                        Text("Delete cached records and results?")
+                        Spacer()
+                        Button("Cancel") { confirmingClear = false }
+                        Button("Clear", role: .destructive) {
+                            confirmingClear = false
+                            monitor.clearSecurityCache()
+                        }
+                    }
+                } else {
+                    Button("Clear Cached Data…") { confirmingClear = true }
+                        .disabled(security.scanning)
+                }
+            } header: {
+                Text("Sources")
+            } footer: {
+                Text("Vulnerability records are cached on this Mac. After clearing, Rackpulse downloads them again and checks every server.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var hasChanges: Bool {
+        !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || organization.trimmingCharacters(in: .whitespacesAndNewlines) != settings.value.socketOrganization
+    }
+
+    private func save() {
+        saveFailed = false
+        let value = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !value.isEmpty {
+            guard monitor.security.saveSocketToken(value) else {
+                saveFailed = true
+                return
+            }
+            token = ""
+        }
+        settings.value.socketOrganization = organization.trimmingCharacters(in: .whitespacesAndNewlines)
+        monitor.scheduleSecurity()
+    }
+
+    private func verify() {
+        verifying = true
+        verification = nil
+        let typed = token
+        let organization = organization
+        Task {
+            verification = await monitor.security.verifySocket(token: typed, organization: organization)
+            verifying = false
+        }
+    }
+
+    private static func statusText(_ status: SourceStatus) -> String {
+        let when = status.checkedAt.map { " \(Format.compactDuration(since: $0)) ago" } ?? ""
+        let message = status.message.map { ": \($0)" } ?? ""
+        let quota = status.quota.map { quota in
+            let refresh = quota.nextWindowRefresh.map { ", more \($0.formatted(.relative(presentation: .named)))" } ?? ""
+            return ". \(quota.callsLeft) \(quota.callsLeft == 1 ? "check" : "checks") left\(refresh)"
+        } ?? ""
+        return switch status.state {
+        case .ok: "Checked\(when)\(quota)"
+        case .partial: "Partly checked\(when)\(message)\(quota)"
+        case .failed: "Failed\(when)\(message)"
+        case .skipped: "Skipped\(message)"
+        }
+    }
+}
+
 struct RuleEditor: View {
     let kind: RuleKind
     @Binding var rule: RuleConfig
     var compact = false
 
     private static let durations: [TimeInterval] = [300, 600, 900, 1800]
+    private static let updateDurations: [TimeInterval] = [86_400, 3 * 86_400, 7 * 86_400]
 
     var body: some View {
         Toggle(isOn: $rule.enabled) {
@@ -422,8 +603,20 @@ struct RuleEditor: View {
             durationPicker
         case .budget:
             Text("Set the budget on each project's page.").foregroundStyle(.secondary)
-        case .unexpectedChange, .failedService, .rebootRequired:
+        case .unexpectedChange, .failedService, .rebootRequired, .hardening:
             EmptyView()
+        case .securityUpdates:
+            Picker("Waiting for at least", selection: $rule.duration) {
+                ForEach(Self.updateDurations, id: \.self) { duration in
+                    let days = Int(duration / 86_400)
+                    Text("\(days) \(days == 1 ? "day" : "days")").tag(duration)
+                }
+            }
+        case .vulnerability:
+            Picker("Minimum severity", selection: $rule.threshold) {
+                Text("High and critical").tag(Double(AdvisorySeverity.high.rank))
+                Text("Critical only").tag(Double(AdvisorySeverity.critical.rank))
+            }
         case .diskSpace:
             Stepper("Above \(Int((rule.threshold * 100).rounded()))% used", value: $rule.threshold, in: 0.5...0.99, step: 0.01)
         case .memory:

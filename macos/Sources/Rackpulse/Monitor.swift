@@ -11,6 +11,8 @@ final class Monitor {
     let notifier = Notifier()
     let uptime = UptimeStore()
     let agents = AgentStore()
+    let security: SecurityStore
+    let decisions: DecisionStore
     let alertCenter: AlertCenter
 
     private(set) var pollers: [UUID: ProjectPoller] = [:]
@@ -29,7 +31,10 @@ final class Monitor {
         self.settings = settings
         let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Rackpulse", isDirectory: true)
-        alertCenter = AlertCenter(database: LocalDatabase.open(at: folder.appendingPathComponent("rackpulse.sqlite")))
+        let database = LocalDatabase.open(at: folder.appendingPathComponent("rackpulse.sqlite"))
+        security = SecurityStore(settings: settings, database: database, folder: folder)
+        decisions = DecisionStore(database: database)
+        alertCenter = AlertCenter(database: database)
         let center = NSWorkspace.shared.notificationCenter
         observers.append(center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.sleeping() }
@@ -40,6 +45,8 @@ final class Monitor {
                 self?.restart()
             }
         })
+        agents.onSecurityReport = { [weak self] project in self?.scheduleSecurity(project) }
+        agents.onRemove = { [weak self] key in self?.security.remove(key) }
         notifier.onSnooze = { [weak self] project, alert in
             self?.pollers[project]?.snooze(alert)
             self?.alertCenter.snoozed(project: project, alert: alert)
@@ -166,6 +173,8 @@ final class Monitor {
     func projectChanged() {
         let ids = Set(store.projects.map(\.id))
         pollers = pollers.filter { ids.contains($0.key) }
+        security.keep(projects: ids)
+        decisions.keep(projects: ids)
         alertCenter.forget(projects: ids)
         for project in store.projects where !project.hasAPI && pollers[project.id] == nil {
             pollers[project.id] = ProjectPoller(agentProject: project.id)
@@ -196,6 +205,68 @@ final class Monitor {
                 self?.restart()
             }
         }
+    }
+
+    func scheduleSecurity(_ project: UUID? = nil) {
+        var candidates: [SecurityCandidate] = []
+        for item in store.projects where project == nil || item.id == project {
+            guard let data = pollers[item.id]?.data else { continue }
+            let firewalls = data.resourcesFetched == nil ? nil : data.firewalls
+            for server in data.servers {
+                let key = AgentStore.key(item.id, server.id)
+                guard let link = agents.links[key], link.isPaired,
+                      let feed = agents.security[key], let report = feed.report, let digest = feed.digest else { continue }
+                let target = SecurityTarget(serverID: server.id, report: report, server: server, firewalls: firewalls, agentPort: link.endpoint.port)
+                candidates.append(SecurityCandidate(key: key, target: target, digest: digest, context: Self.firewallContext(server, firewalls)))
+            }
+        }
+        security.schedule(candidates)
+    }
+
+    func checkSecurity(_ project: UUID, _ server: Int64) {
+        guard !security.scanning else { return }
+        security.force(AgentStore.key(project, server))
+        agents.refreshSecurity(project, server)
+    }
+
+    func decisionCheck(_ project: Project, _ server: Int64, now: Date = .now) -> DecisionCheck {
+        decisions.check(target: AlertCenter.target(project: project, server: server), result: security.result(project.id, server), now: now)
+    }
+
+    func visibleSecurity(_ project: Project, _ server: Int64) -> SecurityResult? {
+        security.result(project.id, server).map { $0.ignoring(decisionCheck(project, server).ignoredKeys) }
+    }
+
+    func ignore(_ decision: FindingDecision, project: Project) {
+        decisions.ignore(decision)
+        decisionsChanged(decision, project)
+    }
+
+    func unignore(_ decision: FindingDecision, project: Project) {
+        decisions.unignore(decision)
+        decisionsChanged(decision, project)
+    }
+
+    private func decisionsChanged(_ decision: FindingDecision, _ project: Project) {
+        let affected = store.projects.filter { decision.allServers || $0.id == project.id }
+        for item in affected {
+            guard let poller = pollers[item.id] else { continue }
+            Task { await poll(item, poller) }
+        }
+    }
+
+    func clearSecurityCache() {
+        security.clearCache()
+        scheduleSecurity()
+    }
+
+    private static func firewallContext(_ server: Server, _ firewalls: [Firewall]?) -> Int? {
+        guard let firewalls else { return nil }
+        let attached = (server.publicNet.firewalls ?? []).compactMap(\.id)
+        var hasher = Hasher()
+        hasher.combine(attached)
+        hasher.combine(firewalls.filter { attached.contains($0.id) }.map(\.rules))
+        return hasher.finalize()
     }
 
     func settingsChanged() {
@@ -258,10 +329,18 @@ final class Monitor {
         let serversKnown = !poller.data.servers.isEmpty
         let reports = await agents.poll(project.id, servers: poller.hasAPI ? poller.data.servers : hosts(project.id))
         if !poller.hasAPI { learnHosts(project.id) }
+        scheduleSecurity(project.id)
+        maintainDecisions(now: now)
+        let findings = security.results(project.id) { agents.security[$0]?.digest }
+        var checks: [Int64: DecisionCheck] = [:]
+        for (server, result) in findings {
+            checks[server] = decisions.check(target: AlertCenter.target(project: project, server: server), result: result, now: now)
+        }
         let context = PollContext(
             now: now, pricing: settings.value.showsCosts ? pricing : nil, priceKind: settings.value.priceKind,
             serverPrices: settings.value.serverPrices(for: project.id),
-            alertSettings: settings.value.alertSettings(for: project), agents: reports
+            alertSettings: settings.value.alertSettings(for: project), agents: reports,
+            security: findings.mapValues { result in checks[result.serverID].map { result.ignoring($0.ignoredKeys) } ?? result }
         )
         let agentServers = poller.hasAPI ? [] : hosts(project.id)
         let activity = poller.hasAPI ? (metrics: [:], baseline: [:]) : await agentActivity(project.id, agentServers)
@@ -269,7 +348,7 @@ final class Monitor {
         if poller.hasAPI, !serversKnown, !poller.data.servers.isEmpty {
             _ = await agents.poll(project.id, servers: poller.data.servers)
         }
-        await alertCenter.collect(project: project, poller: poller, events: events, context: context) { serverID in
+        await alertCenter.collect(project: project, poller: poller, events: events, context: context, findings: findings, decisions: checks) { serverID in
             subtitle(project, poller, serverID)
         }
         if poller.problem == nil {
@@ -282,6 +361,16 @@ final class Monitor {
             store.update(project.id) { $0.environment = .none }
         }
         if deliver { await deliverAlerts() }
+    }
+
+    private func maintainDecisions(now: Date) {
+        var results: [String: SecurityResult] = [:]
+        for project in store.projects {
+            for server in pollers[project.id]?.data.servers ?? [] {
+                if let result = security.result(project.id, server.id) { results[AlertCenter.target(project: project, server: server.id)] = result }
+            }
+        }
+        decisions.maintain(results: results, now: now)
     }
 
     private func hosts(_ id: UUID) -> [Server] {

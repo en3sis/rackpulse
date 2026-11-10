@@ -23,6 +23,7 @@ func printSummary(cfg config.Config, summary installSummary, version string) {
 	if cfg.TailscaleName != "" {
 		fmt.Printf("Tailscale name: %s\n", cfg.TailscaleName)
 	}
+	fmt.Println(dockerAccessLine(summary.docker, cfg.NoDocker))
 	switch {
 	case summary.migrated:
 		line := "Replaced " + legacyName + " with " + serviceName + "."

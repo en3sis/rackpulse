@@ -1,0 +1,97 @@
+{
+ "id": "PYSEC-2018-28",
+ "details": "The Requests package before 2.20.0 for Python sends an HTTP Authorization header to an http URI upon receiving a same-hostname https-to-http redirect, which makes it easier for remote attackers to discover credentials by sniffing the network.",
+ "aliases": [
+  "CVE-2018-18074",
+  "GHSA-x84v-xcm2-53pg"
+ ],
+ "modified": "2023-11-08T04:00:04.815794Z",
+ "published": "2018-10-09T17:29:00Z",
+ "references": [
+  {
+   "type": "WEB",
+   "url": "https://github.com/requests/requests/pull/4718"
+  },
+  {
+   "type": "REPORT",
+   "url": "https://github.com/requests/requests/issues/4716"
+  },
+  {
+   "type": "FIX",
+   "url": "https://github.com/requests/requests/commit/c45d7c49ea75133e52ab22a8e9e13173938e36ff"
+  },
+  {
+   "type": "WEB",
+   "url": "https://bugs.debian.org/910766"
+  },
+  {
+   "type": "WEB",
+   "url": "https://usn.ubuntu.com/3790-1/"
+  },
+  {
+   "type": "WEB",
+   "url": "http://docs.python-requests.org/en/master/community/updates/#release-and-version-history"
+  },
+  {
+   "type": "WEB",
+   "url": "https://usn.ubuntu.com/3790-2/"
+  },
+  {
+   "type": "WEB",
+   "url": "http://lists.opensuse.org/opensuse-security-announce/2019-07/msg00024.html"
+  },
+  {
+   "type": "ADVISORY",
+   "url": "https://access.redhat.com/errata/RHSA-2019:2035"
+  },
+  {
+   "type": "ADVISORY",
+   "url": "https://github.com/advisories/GHSA-x84v-xcm2-53pg"
+  }
+ ],
+ "affected": [
+  {
+   "package": {
+    "name": "requests",
+    "ecosystem": "PyPI",
+    "purl": "pkg:pypi/requests"
+   },
+   "ranges": [
+    {
+     "type": "GIT",
+     "repo": "https://github.com/requests/requests",
+     "events": [
+      {
+       "introduced": "0"
+      },
+      {
+       "fixed": "c45d7c49ea75133e52ab22a8e9e13173938e36ff"
+      }
+     ]
+    },
+    {
+     "type": "ECOSYSTEM",
+     "events": [
+      {
+       "introduced": "0"
+      },
+      {
+       "fixed": "2.20.0"
+      }
+     ]
+    }
+   ],
+   "versions": [
+    "0.0.1",
+    "0.10.0",
+    "0.10.1",
+    "0.10.2",
+    "0.10.3"
+   ],
+   "database_specific": {
+    "source": "https://github.com/pypa/advisory-database/blob/main/vulns/requests/PYSEC-2018-28.yaml"
+   }
+  }
+ ],
+ "schema_version": "1.7.3"
+}

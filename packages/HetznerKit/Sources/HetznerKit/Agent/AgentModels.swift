@@ -139,6 +139,10 @@ public struct AgentSnapshot: Sendable, Hashable, Codable {
             self.rebootRequired = rebootRequired
             self.failedUnits = failedUnits
         }
+
+        public var failedServices: [String] {
+            failedUnits.filter { !($0.hasPrefix("session-") && $0.hasSuffix(".scope")) }
+        }
     }
 
     public struct Docker: Sendable, Hashable, Codable {

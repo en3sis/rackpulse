@@ -76,12 +76,27 @@ enum AgentProblem: Equatable {
             "The agent's certificate changed. If you reinstalled it, pair again. Otherwise something else may be answering on this address."
         case .agent(.invalidResponse):
             "The agent sent an answer Rackpulse does not understand. Update the agent."
+        case .agent(.unsupported):
+            "The agent on this server is too old for this. Update it with the command below."
+        case .agent(.notReady):
+            "The agent is still collecting security data. It will show in a few minutes."
         case .otherServer(let id):
             "The agent at \(place) runs on another server (ID \(id))."
         case .noKey:
             "The pairing key is missing from the Keychain. Remove the agent and set it up again."
         }
     }
+}
+
+struct SecurityFeed {
+    var report: AgentSecurity?
+    var digest: String?
+    var fetched: Date?
+    var attempted: Date?
+    var problem: AgentError?
+
+    var unsupported: Bool { problem == .unsupported }
+    var notReady: Bool { problem == .notReady }
 }
 
 struct AgentState {
@@ -99,16 +114,23 @@ final class AgentStore {
     static let installURL = "\(Flavor.agentURL)/install.sh"
     private static let linksKey = "agentLinks"
     private static let historyInterval: TimeInterval = 900
+    private static let securityInterval: TimeInterval = 1_800
+    private static let securityRetry: TimeInterval = 120
+    private static let securityErrorRetry: TimeInterval = 300
 
     private(set) var links: [String: AgentLink]
     private(set) var states: [String: AgentState] = [:]
     private(set) var uptime: [String: AgentUptime]
+    private(set) var security: [String: SecurityFeed] = [:]
     private(set) var dockerGroups: [String: Bool] = UserDefaults.standard.dictionary(forKey: "dockerGroups") as? [String: Bool] ?? [:]
 
     @ObservationIgnored private var tokens: [String: String] = [:]
     @ObservationIgnored private var clients: [String: AgentClient] = [:]
     @ObservationIgnored private var historyFetched: [String: Date] = [:]
     @ObservationIgnored private var pairing: Set<String> = []
+    private(set) var securityFetching: Set<String> = []
+    @ObservationIgnored var onSecurityReport: (UUID) -> Void = { _ in }
+    @ObservationIgnored var onRemove: (String) -> Void = { _ in }
     @ObservationIgnored private var refreshing: Set<String> = []
     @ObservationIgnored private let uptimeURL: URL
 
@@ -132,6 +154,14 @@ final class AgentStore {
 
     func state(_ project: UUID, _ server: Int64) -> AgentState? {
         states[Self.key(project, server)]
+    }
+
+    func securityFeed(_ project: UUID, _ server: Int64) -> SecurityFeed? {
+        security[Self.key(project, server)]
+    }
+
+    func isFetchingSecurity(_ project: UUID, _ server: Int64) -> Bool {
+        securityFetching.contains(Self.key(project, server))
     }
 
     func uptime(_ project: UUID, _ server: Int64) -> AgentUptime? {
@@ -272,8 +302,10 @@ final class AgentStore {
         clients[key] = nil
         uptime[key] = nil
         historyFetched[key] = nil
+        security[key] = nil
         persist()
         saveUptime()
+        onRemove(key)
     }
 
     @discardableResult
@@ -315,6 +347,7 @@ final class AgentStore {
             historyFetched[key] = nil
             adoptTailscaleName(key, snapshot)
             persist()
+            fetchSecurity(key, project: project, client: client)
             await refreshHistory(key, client: client)
         } catch let error as AgentError {
             fail(key, .agent(error))
@@ -374,18 +407,75 @@ final class AgentStore {
                 if adoptTailscaleName(key, snapshot) { persist() }
                 if links[key]?.version != snapshot.version {
                     links[key]?.version = snapshot.version
+                    security[key]?.attempted = nil
                     persist()
                 }
             case .failure(let error):
                 fail(key, .agent(error))
             }
             reports[id] = AgentReport(current: states[key]?.problem == nil ? states[key]?.snapshot : nil, failures: states[key]?.failures ?? 0)
+            if case .success = result, let client = clients[key], securityDue(key) {
+                fetchSecurity(key, project: project, client: client)
+            }
             if case .success = result, let client = clients[key],
                historyFetched[key].map({ Date.now.timeIntervalSince($0) > Self.historyInterval }) ?? true {
                 await refreshHistory(key, client: client)
             }
         }
         return reports
+    }
+
+    func refreshSecurity(_ project: UUID, _ server: Int64) {
+        let key = Self.key(project, server)
+        guard let link = links[key], let client = client(key, link: link) else {
+            onSecurityReport(project)
+            return
+        }
+        fetchSecurity(key, project: project, client: client)
+    }
+
+    private func securityDue(_ key: String) -> Bool {
+        guard !securityFetching.contains(key) else { return false }
+        guard let feed = security[key], let attempted = feed.attempted else { return true }
+        let wait: TimeInterval = switch feed.problem {
+        case nil, .unsupported: Self.securityInterval
+        case .notReady: Self.securityRetry
+        default: Self.securityErrorRetry
+        }
+        return Date.now.timeIntervalSince(attempted) >= wait
+    }
+
+    private func fetchSecurity(_ key: String, project: UUID, client: AgentClient) {
+        guard securityFetching.insert(key).inserted else { return }
+        security[key, default: SecurityFeed()].attempted = .now
+        Task {
+            defer {
+                securityFetching.remove(key)
+                onSecurityReport(project)
+            }
+            let outcome: Result<AgentSecurity, AgentError>
+            do {
+                outcome = .success(try await client.security())
+            } catch let error as AgentError {
+                outcome = .failure(error)
+            } catch {
+                outcome = .failure(.unreachable)
+            }
+            guard links[key] != nil else { return }
+            var feed = security[key] ?? SecurityFeed()
+            switch outcome {
+            case .success(let report):
+                let digest = await Task.detached(priority: .utility) { SecurityStore.digest(report) }.value
+                feed.report = report
+                feed.digest = digest
+                feed.fetched = .now
+                feed.problem = nil
+            case .failure(let error):
+                feed.problem = error
+                if error == .unsupported { feed.report = nil }
+            }
+            security[key] = feed
+        }
     }
 
     func refreshLive(_ project: UUID, _ server: Int64, history: Bool) async {

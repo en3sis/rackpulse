@@ -2,6 +2,7 @@ import Foundation
 
 public struct RuleEngine: Sendable {
     public static let userStopCommands: Set<String> = ["shutdown_server", "stop_server"]
+    static let heldKinds: Set<RuleKind> = [.memory, .securityUpdates]
 
     public let settings: AlertSettings
     public let calendar: Calendar
@@ -12,7 +13,7 @@ public struct RuleEngine: Sendable {
     }
 
     enum Level {
-        case above, band, below
+        case above, band, below, unknown
     }
 
     struct Observation {
@@ -46,13 +47,17 @@ public struct RuleEngine: Sendable {
                snapshot.agents[serverID].map({ $0.current == nil }) == true {
                 continue
             }
+            if observation == nil, kind.needsSecurityResult, let serverID, snapshot.security[serverID] == nil,
+               snapshot.agents[serverID] != nil, snapshot.servers.contains(where: { $0.id == serverID }) {
+                continue
+            }
             var track = state.tracks[id] ?? AlertState.Track(kind: kind, serverID: serverID)
             switch observation?.level ?? .below {
             case .above:
                 track.raised += 1
                 track.cleared = 0
                 track.aboveSince = track.aboveSince ?? now
-                let held = rule.kind != .memory || now.timeIntervalSince(track.aboveSince ?? now) >= rule.duration
+                let held = !Self.heldKinds.contains(rule.kind) || now.timeIntervalSince(track.aboveSince ?? now) >= rule.duration
                 if track.alert == nil, track.raised >= raiseAfter(rule), held, let observation {
                     let alert = FiringAlert(id: id, kind: kind, severity: observation.severity, title: observation.title, since: now)
                     track.alert = alert
@@ -65,6 +70,8 @@ public struct RuleEngine: Sendable {
                 } else {
                     track.cleared = 0
                 }
+            case .unknown:
+                break
             case .below:
                 track.raised = 0
                 track.aboveSince = nil
@@ -155,6 +162,9 @@ public struct RuleEngine: Sendable {
         for server in snapshot.servers {
             if let report = snapshot.agents[server.id] {
                 result += observeAgent(report, server: server, now: now)
+            }
+            if let security = snapshot.security[server.id] {
+                result += observeSecurity(security, server: server)
             }
         }
 
@@ -248,7 +258,7 @@ public struct RuleEngine: Sendable {
         }
 
         if settings.rule(.failedService, server: server.id) != nil {
-            let units = snapshot.system.failedUnits
+            let units = snapshot.system.failedServices
             result.append(Observation(
                 id: "failedService:\(server.id)", kind: .failedService, serverID: server.id,
                 level: units.isEmpty ? .below : .above, severity: .warning,
@@ -264,6 +274,55 @@ public struct RuleEngine: Sendable {
             ))
         }
         return result
+    }
+
+    private func observeSecurity(_ security: SecurityResult, server: Server) -> [Observation] {
+        var result: [Observation] = []
+        let name = server.name
+
+        if let rule = settings.rule(.securityUpdates, server: server.id) {
+            let count = security.pendingSecurityUpdates
+            let days = max(1, Int((rule.duration / 86_400).rounded()))
+            result.append(Observation(
+                id: "securityUpdates:\(server.id)", kind: .securityUpdates, serverID: server.id,
+                level: count > 0 ? .above : security.updatesError == nil ? .below : .unknown, severity: .warning,
+                title: "\(name): \(count) security \(count == 1 ? "update" : "updates") waiting for \(days) \(days == 1 ? "day" : "days")"
+            ))
+        }
+
+        if let rule = settings.rule(.vulnerability, server: server.id) {
+            let minimum = AdvisorySeverity(rank: max(1, Int(rule.threshold)))
+            let items = security.alerting(minimum: minimum)
+            let worst = items.contains { $0.advisory.urgent || $0.advisory.severity == .critical }
+            result.append(Observation(
+                id: "vulnerability:\(server.id)", kind: .vulnerability, serverID: server.id,
+                level: !items.isEmpty ? .above : security.lookupFailed ? .unknown : .below, severity: worst ? .critical : .warning,
+                title: Self.vulnerabilityTitle(items, server: name)
+            ))
+        }
+
+        if settings.rule(.hardening, server: server.id) != nil {
+            let failing = security.failingChecks
+            result.append(Observation(
+                id: "hardening:\(server.id)", kind: .hardening, serverID: server.id,
+                level: failing.isEmpty ? .below : .above, severity: .warning,
+                title: failing.count == 1 ? "\(name): \(failing[0].title)" : "\(name): \(failing.count) hardening checks fail"
+            ))
+        }
+        return result
+    }
+
+    static func vulnerabilityTitle(_ items: [SecurityResult.Item], server name: String) -> String {
+        let malware = items.filter { $0.advisory.isMalware }
+        if malware.count == 1 { return "\(name): \(malware[0].finding.package.name) is a malicious package" }
+        if malware.count > 1 { return "\(name): \(malware.count) malicious packages found" }
+        let exploited = items.filter { $0.advisory.isExploited }.count
+        if exploited == 1 { return "\(name): 1 vulnerability is known to be exploited" }
+        if exploited > 1 { return "\(name): \(exploited) vulnerabilities are known to be exploited" }
+        let levels = Set(items.map(\.advisory.severity)).sorted(by: >).map(\.rawValue).joined(separator: " and ")
+        return items.count == 1
+            ? "\(name): 1 \(levels) vulnerability has a fix"
+            : "\(name): \(items.count) \(levels) vulnerabilities have a fix"
     }
 
     private func stoppedByUser(_ server: Server, actions: [ServerAction]) -> Bool {

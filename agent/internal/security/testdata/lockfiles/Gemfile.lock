@@ -1,0 +1,26 @@
+GIT
+  remote: https://github.com/acme/private.git
+  revision: abc
+  specs:
+    private (0.1.0)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    actionpack (7.0.4)
+      rack (~> 2.0)
+    nokogiri (1.13.10-x86_64-linux)
+      racc (~> 1.4)
+    nokogiri (1.13.10-arm64-darwin)
+    rack (2.2.4)
+    racc (1.6.0)
+
+PLATFORMS
+  x86_64-linux
+
+DEPENDENCIES
+  actionpack (= 7.0.4)
+  nokogiri
+
+BUNDLED WITH
+   2.4.10

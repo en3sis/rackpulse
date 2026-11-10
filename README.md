@@ -46,6 +46,17 @@ With the agent, a server page also shows:
 - Your Docker containers, grouped by Compose project, with their health, restarts, CPU, and memory. Each container has its own page with ports, volumes, and 7 days of history.
 - 30 days of uptime recorded on the server itself, so it also catches crashes that Hetzner can't see.
 
+### Security checks
+
+With the agent, the Security tab shows:
+
+- Security updates waiting on the server, and the command to install them.
+- A short hardening checklist: SSH password and root login, automatic updates, firewall, ports open to the internet, risky Docker settings, a kernel that needs a reboot, and releases that no longer get security updates.
+- Known vulnerabilities in the server's packages and in the dependencies of your Docker Compose projects (npm, PyPI, Go, Cargo, Composer, RubyGems) and inside the images of running containers, with the version that fixes each one. This part is off until you turn it on in Settings, because it sends package names and versions to [OSV.dev](https://osv.dev). It can add exploit data from [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) and [FIRST](https://www.first.org/epss/), downloaded as full lists so no CVE ids leave your Mac, and malware checks from [Socket](https://socket.dev) with your own API token.
+- Ignore a finding with a reason and an end date, see every server's findings in one list, and export a Markdown report, a CycloneDX SBOM or the ignores as OpenVEX.
+
+Rackpulse alerts you about vulnerabilities that have a fix, about packages that are known to be exploited or malicious, about failing hardening checks, and about security updates that have been waiting for days. Each finding notifies once: the first scan sends one summary, and later scans only report new findings or ones that got worse. The agent only reports what is installed. It never installs updates or changes settings.
+
 To install it, open a server in Rackpulse, choose **Set up agent**, and run the command it shows on the server. Your Mac connects to the agent on port 7311, so that port must be open to your Mac. Over Tailscale or a private network you don't need to open anything. The setup page tells you what to do for your server.
 
 The agent only reads. It can't run commands or change anything on the server. To remove it, run `sudo rackpulse-agent uninstall`. [docs/AGENT.md](docs/AGENT.md) has the details.
@@ -60,7 +71,8 @@ Rackpulse checks for updates once a day and asks before it installs one.
 
 ## Privacy
 
-- Rackpulse only talks to the Hetzner API, its own update feed, and the agents you set up.
+- Rackpulse only talks to the Hetzner API, its own update feed, and the agents you set up. If you turn on vulnerability checks, it also sends package names and versions to OSV.dev, CVE ids to CISA and FIRST, and, with your token, dependency names and versions to Socket. It never sends server names, IP addresses or file paths.
+- The update check reads one file once a day. We count those checks by app version, and we count downloads of the app and the agent, to know how many installs are in use. The count holds the date, the version, and for the agent the processor type, with no IP address and no identifier. To stop the check, turn off **Check for updates automatically** in Settings, About.
 - Your tokens and agent keys are stored in the macOS Keychain. They are never written to a file.
 - With a Read token, Rackpulse can't change anything in your projects.
 - Each agent has its own key. Without that key, nobody can read the agent's data.

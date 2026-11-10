@@ -12,6 +12,7 @@ case "$bump" in
     ;;
 esac
 
+require_release_key
 if [ "$SIGN_ID" = "-" ]; then
   echo "Set SIGN_ID in .env, for example: SIGN_ID=Developer ID Application: Your Name (TEAMID)"
   exit 1
@@ -43,6 +44,10 @@ fi
 agent=$(agent_version)
 if ! curl -fsSI "$SITE_URL/agent/$agent/SHA256SUMS" -o /dev/null; then
   echo "Agent $agent (agent/VERSION) is not published at $SITE_URL/agent/$agent. The app would offer an agent update that does not exist. Run make agent and make publish-agent first"
+  exit 1
+fi
+if ! curl -fsSI "$SITE_URL/agent/$agent/SHA256SUMS.sig" -o /dev/null; then
+  echo "Agent $agent is published without SHA256SUMS.sig, so install.sh would refuse it. Run make publish-agent again"
   exit 1
 fi
 echo "Agent $agent is published, the app will offer it as the latest agent"

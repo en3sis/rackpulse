@@ -1,0 +1,14 @@
+# pinned
+Django==4.2.1
+requests[security,socks] == 2.31.0 ; python_version >= "3.8"
+Flask_SQLAlchemy==3.0.5  # comment
+zope.interface==6.0 \
+    --hash=sha256:abc \
+    --hash=sha256:def
+numpy>=1.24
+pandas
+-r other.txt
+-e git+https://github.com/acme/lib.git#egg=lib
+urllib3===1.26.0
+celery==5.*
+mylib @ https://example.com/mylib-1.0.tar.gz

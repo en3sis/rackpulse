@@ -10,15 +10,16 @@ The optional Linux agent for Rackpulse. It is one static Go binary that runs as 
 | `internal/config` | Config file, file paths, pairing key validation |
 | `internal/pairing` | TLS certificate, fingerprint, `/v1/hello` proof |
 | `internal/collect` | Host, memory, disks, systemd, Hetzner metadata, Docker, and the snapshot taken every 60 seconds |
+| `internal/security` | Packages, pending updates, hardening checks, listening ports, Compose lockfiles and container images for `/v1/security` |
 | `internal/history` | Uptime minutes, host samples, container samples, and their files |
 | `internal/boots` | Past boots from the system journal, read at install |
 | `internal/server` | HTTPS handlers, key check, and the `run` daemon |
 | `internal/install` | `install`, `set-key`, `uninstall`, `status`, the systemd unit, and the upgrade from `rackbar-agent` |
 | `internal/atomicfile` | Writes a file through a temporary file and a rename |
-| `install.sh` | The script behind `curl ... \| sudo sh` |
+| `install.sh` | The script behind `curl ... \| sudo sh`, with the release public key |
 | `VERSION` | The release version |
 
-Imports go one way. `history` stores what `collect` produces, `boots` writes into `history`, and `server` and `install` use the rest. Only `main` imports `server` and `install`.
+Imports go one way. `history` stores what `collect` produces, `security` reads Docker through `collect`, `boots` writes into `history`, and `server` and `install` use the rest. Only `main` imports `server` and `install`.
 
 ## Build and test
 
@@ -30,7 +31,7 @@ go vet ./...
 go test ./...
 ```
 
-From the repository root, `make agent` builds `dist/agent/<version>/` with `rackpulse-agent-linux-amd64`, `rackpulse-agent-linux-arm64`, `SHA256SUMS` and `install.sh`. `make test-agent` runs the tests.
+From the repository root, `make agent` builds `dist/agent/<version>/` with `rackpulse-agent-linux-amd64`, `rackpulse-agent-linux-arm64`, `SHA256SUMS` and `install.sh`, plus `SHA256SUMS.sig` when `AGENT_SIGNING_KEY` is set (see "Agent signing key" in [../docs/RELEASING.md](../docs/RELEASING.md)). `install.sh` refuses a build without `SHA256SUMS.sig`. `make test-agent` runs the tests.
 
 To build one binary by hand:
 
@@ -47,7 +48,7 @@ Any Linux machine with systemd works. Copy the binary over and run `sudo ./rackp
 key="rb1_$(openssl rand 32 | base64 | tr '+/' '-_' | tr -d '=')"
 ```
 
-With OrbStack on a Mac, a machine sees your files under `/Users`, so `install.sh` can read the build output through a `file://` URL:
+With OrbStack on a Mac, a machine sees your files under `/Users`, so `install.sh` can read the build output through a `file://` URL. Set `AGENT_SIGNING_KEY` before `make agent`, because `install.sh` refuses an unsigned build:
 
 ```bash
 make agent

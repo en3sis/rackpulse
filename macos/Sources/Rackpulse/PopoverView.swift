@@ -36,8 +36,17 @@ struct PopoverView: View {
     enum Tab: String, CaseIterable, Identifiable {
         case servers = "Servers"
         case costs = "Costs"
+        case security = "Security"
 
         var id: String { rawValue }
+
+        var icon: String {
+            switch self {
+            case .servers: "server.rack"
+            case .costs: "creditcard"
+            case .security: "shield"
+            }
+        }
     }
 
     private var maxMainHeight: CGFloat {
@@ -51,6 +60,20 @@ struct PopoverView: View {
 
     private var showsCosts: Bool {
         monitor.settings.value.showsCosts
+    }
+
+    private var showsSecurity: Bool {
+        store.projects.contains { project in
+            (monitor.poller(project.id)?.data.servers ?? []).contains { monitor.agents.link(project.id, $0.id)?.isPaired == true }
+        }
+    }
+
+    private var tabs: [Tab] {
+        Tab.allCases.filter { $0 == .servers || ($0 == .costs && showsCosts) || ($0 == .security && showsSecurity) }
+    }
+
+    private var shownTab: Tab {
+        tabs.contains(tab) ? tab : .servers
     }
 
     private var showsFooter: Bool {
@@ -95,6 +118,7 @@ struct PopoverView: View {
             switch route {
             case .servers: tab = .servers; detail = nil; adding = false
             case .costs: tab = showsCosts ? .costs : .servers; detail = nil; adding = false
+            case .security: tab = .security; detail = nil; adding = false
             case .server(let project, let id, let range): detail = DetailTarget(project: project, server: id, range: range); adding = false
             case .agent(let project, let id): detail = DetailTarget(project: project, server: id, agent: true); adding = false
             case .serverTab(let project, let id, let tab): detail = DetailTarget(project: project, server: id, tab: tab); adding = false
@@ -138,8 +162,8 @@ struct PopoverView: View {
                 }
             } else {
                 header
-                if showsCosts {
-                    SegmentedControl(selection: $tab, options: Tab.allCases.map { ($0, $0.rawValue) })
+                if tabs.count > 1 {
+                    SegmentedControl(selection: $tab, options: tabs.map { ($0, $0.rawValue) }, icon: \.icon)
                         .padding(.horizontal, 16)
                 }
                 if let problem = monitor.problem {
@@ -148,7 +172,7 @@ struct PopoverView: View {
                 if query.isEmpty {
                     FleetHeadline(monitor: monitor, store: store, open: openAlert)
                 }
-                switch showsCosts ? tab : .servers {
+                switch shownTab {
                 case .servers:
                     if !query.isEmpty { searchBar }
                     ServerList(monitor: monitor, store: store, query: query, highlighted: highlightedTarget,
@@ -160,6 +184,10 @@ struct PopoverView: View {
                     CostsView(monitor: monitor, store: store, openSettings: openSettings,
                               openServer: { detail = DetailTarget(project: $0, server: $1) },
                               focus: $costProject)
+                case .security:
+                    FleetSecurityView(monitor: monitor, store: store, openSettings: openSettings) {
+                        detail = DetailTarget(project: $0, server: $1, tab: .security)
+                    }
                 }
             }
         }
@@ -200,7 +228,7 @@ struct PopoverView: View {
 
             Spacer()
 
-            if tab == .servers {
+            if shownTab == .servers {
                 Button {
                     var transaction = Transaction()
                     transaction.disablesAnimations = true
@@ -256,8 +284,11 @@ struct PopoverView: View {
             Group {
                 Button("") { monitor.refreshNow() }.keyboardShortcut("r")
                 Button("") { adding = true }.keyboardShortcut("n")
-                Button("") { tab = .servers; detail = nil }.keyboardShortcut("1")
-                Button("") { if showsCosts { tab = .costs; detail = nil } }.keyboardShortcut("2")
+                if detail == nil {
+                    Button("") { tab = .servers }.keyboardShortcut("1")
+                    Button("") { if showsCosts { tab = .costs } }.keyboardShortcut("2")
+                    Button("") { if showsSecurity { tab = .security } }.keyboardShortcut("3")
+                }
             }
             .frame(width: 0, height: 0)
             .opacity(0)
@@ -491,19 +522,39 @@ private final class MenuHandler: NSObject {
 private struct RefreshIcon: View {
     let spinning: Bool
     let problem: Bool
+    @State private var active = false
     @State private var angle = 0.0
     private static let turn = Duration.milliseconds(800)
 
     var body: some View {
-        Image(systemName: problem ? "exclamationmark.arrow.circlepath" : "arrow.clockwise")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(problem ? Theme.orange : Theme.secondary)
-            .rotationEffect(.degrees(angle))
+        icon
             .task(id: spinning) {
-                while spinning, !Task.isCancelled {
-                    withAnimation(.linear(duration: 0.8)) { angle += 360 }
+                if spinning {
+                    active = true
+                } else {
                     try? await Task.sleep(for: Self.turn)
+                    if !Task.isCancelled { active = false }
                 }
             }
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        let image = Image(systemName: problem ? "exclamationmark.arrow.circlepath" : "arrow.clockwise")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(problem ? Theme.orange : Theme.secondary)
+            .frame(width: 14, height: 14)
+        if #available(macOS 15, *) {
+            image.symbolEffect(.rotate.wholeSymbol, options: .repeat(.continuous), isActive: active)
+        } else {
+            image
+                .rotationEffect(.degrees(angle))
+                .task(id: active) {
+                    while active, !Task.isCancelled {
+                        withAnimation(.linear(duration: 0.8)) { angle += 360 }
+                        try? await Task.sleep(for: Self.turn)
+                    }
+                }
+        }
     }
 }

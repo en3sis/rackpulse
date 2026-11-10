@@ -3,6 +3,7 @@ import SwiftUI
 struct SegmentedControl<Value: Hashable>: View {
     @Binding var selection: Value
     let options: [(Value, String)]
+    var icon: (Value) -> String? = { _ in nil }
 
     @Namespace private var namespace
     @State private var pill: Value?
@@ -17,7 +18,14 @@ struct SegmentedControl<Value: Hashable>: View {
                     transaction.disablesAnimations = true
                     withTransaction(transaction) { selection = value }
                 } label: {
-                    Text(title)
+                    HStack(spacing: 4) {
+                        if let symbol = icon(value) {
+                            Image(systemName: symbol)
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        Text(title)
+                            .lineLimit(1)
+                    }
                         .font(.system(size: 12.5, weight: selected ? .semibold : .medium))
                         .foregroundStyle(selected ? Theme.text : Theme.secondary)
                         .frame(maxWidth: .infinity, minHeight: 24)

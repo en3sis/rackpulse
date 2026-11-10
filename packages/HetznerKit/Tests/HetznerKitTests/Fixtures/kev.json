@@ -1,0 +1,74 @@
+{
+ "title": "CISA Catalog of Known Exploited Vulnerabilities",
+ "catalogVersion": "2026.10.23",
+ "dateReleased": "2026-10-23T19:30:18.9209Z",
+ "count": 1756,
+ "vulnerabilities": [
+  {
+   "cveID": "CVE-2023-4863",
+   "vendorProject": "Google",
+   "product": "Chromium WebP",
+   "vulnerabilityName": "Google Chromium WebP Heap-Based Buffer Overflow Vulnerability",
+   "dateAdded": "2023-09-13",
+   "shortDescription": "Google Chromium WebP contains a heap-based buffer overflow vulnerability that allows a remote attacker to perform an out-of-bounds memory write via a crafted HTML page. This vulnerability can affect applications that use the WebP Codec.",
+   "requiredAction": "Apply mitigations per vendor instructions or discontinue use of the product if mitigations are unavailable.",
+   "dueDate": "2023-10-04",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "No",
+   "notes": "https://chromereleases.googleblog.com/2023/09/stable-channel-update-for-desktop_11.html?m=1; https://nvd.nist.gov/vuln/detail/CVE-2023-4863",
+   "cwes": [
+    "CWE-787"
+   ]
+  },
+  {
+   "cveID": "CVE-2021-44228",
+   "vendorProject": "Apache",
+   "product": "Log4j2",
+   "vulnerabilityName": "Apache Log4j2 Remote Code Execution Vulnerability",
+   "dateAdded": "2021-12-10",
+   "shortDescription": "Apache Log4j2 contains a vulnerability where JNDI features do not protect against attacker-controlled JNDI-related endpoints, allowing for remote code execution.",
+   "requiredAction": "For all affected software assets for which updates exist, the only acceptable remediation actions are: 1) Apply updates; OR 2) remove affected assets from agency networks. Temporary mitigations using one of the measures provided at https://www.cisa.gov/uscert/ed-22-02-apache-log4j-recommended-mitigation-measures are only acceptable until updates are available.",
+   "dueDate": "2021-12-24",
+   "knownRansomwareCampaignUse": "Known",
+   "forensicTriage": "No",
+   "notes": "https://nvd.nist.gov/vuln/detail/CVE-2021-44228",
+   "cwes": [
+    "CWE-20",
+    "CWE-400",
+    "CWE-502"
+   ]
+  },
+  {
+   "cveID": "CVE-2026-114625",
+   "vendorProject": "Arista",
+   "product": "VeloCloud Orchestrator",
+   "vulnerabilityName": "Arista VeloCloud Orchestrator SQL Injection Vulnerability",
+   "dateAdded": "2026-10-23",
+   "shortDescription": "Arista VeloCloud Orchestrator on-prem contains a SQL injection vulnerability that may allow a remote attacker to access privileged internal functionality and impact the VCO host. Successful exploitation may compromise the confidentiality, integrity, and availability of the orchestrator and data managed by the orchestrator.",
+   "requiredAction": "Apply mitigations in accordance with vendor instructions, ensuring compliance with CISA\u2019s BOD 26-04 Prioritizing Security Updates Based on Risk (see URL in Notes) guidance and CISA\u2019s \u201cForensics Triage Requirements\u201d (see URL in Notes). Follow applicable BOD 26-04 guidance for cloud services or discontinue use of the product if mitigations are unavailable. Stakeholders are responsible for evaluating each asset's internet exposure and ensuring adherence to BOD 26-04 patching guidelines.",
+   "dueDate": "2026-10-26",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "Yes",
+   "notes": "https://www.arista.com/en/support/advisories-notices/security-advisory/24838-security-advisory-0199 ; ; BOD 26-04: https://www.cisa.gov/news-events/directives/bod-26-04-prioritizing-security-updates-based-risk ; Forensics Triage Requirements: https://www.cisa.gov/news-events/directives/bod-26-04-implementation-guidance-prioritizing-security-updates-based-risk ; https://nvd.nist.gov/vuln/detail/CVE-2026-114625",
+   "cwes": [
+    "CWE-89"
+   ]
+  },
+  {
+   "cveID": "CVE-2026-110447",
+   "vendorProject": "Collabora",
+   "product": "Collabora Online \u2013 Built-in CODE Server",
+   "vulnerabilityName": "Collabora Online \u2013 Built-in CODE Server OS Command Injection Vulnerability",
+   "dateAdded": "2026-10-23",
+   "shortDescription": "Collabora Collabora Online \u2013 Built-in CODE Server when used within the NextCloud platform contains an OS command injection vulnerability that allows for remote code execution when the CODE server isn't running.",
+   "requiredAction": "Apply mitigations in accordance with vendor instructions, ensuring compliance with CISA\u2019s BOD 26-04 Prioritizing Security Updates Based on Risk (see URL in Notes) guidance and CISA\u2019s \u201cForensics Triage Requirements\u201d (see URL in Notes). Follow applicable BOD 26-04 guidance for cloud services or discontinue use of the product if mitigations are unavailable. Stakeholders are responsible for evaluating each asset's internet exposure and ensuring adherence to BOD 26-04 patching guidelines.",
+   "dueDate": "2026-10-26",
+   "knownRansomwareCampaignUse": "Unknown",
+   "forensicTriage": "Yes",
+   "notes": "https://help.nextcloud.com/t/to-collabora-built-in-user-update-asap/250516 ; https://github.com/CollaboraOnline/online/security/advisories/GHSA-g3vx-3m76-fghh ; BOD 26-04: https://www.cisa.gov/news-events/directives/bod-26-04-prioritizing-security-updates-based-risk ; Forensics Triage Requirements: https://www.cisa.gov/news-events/directives/bod-26-04-implementation-guidance-prioritizing-security-updates-based-risk ; https://nvd.nist.gov/vuln/detail/CVE-2026-110447",
+   "cwes": [
+    "CWE-78"
+   ]
+  }
+ ]
+}

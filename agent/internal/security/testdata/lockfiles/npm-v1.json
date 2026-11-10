@@ -1,0 +1,29 @@
+{
+  "name": "web",
+  "version": "1.0.0",
+  "lockfileVersion": 1,
+  "requires": true,
+  "dependencies": {
+    "express": {
+      "version": "4.17.1",
+      "resolved": "https://registry.npmjs.org/express/-/express-4.17.1.tgz",
+      "dependencies": {
+        "debug": {
+          "version": "2.6.9"
+        }
+      }
+    },
+    "debug": {
+      "version": "4.3.4"
+    },
+    "lodash": {
+      "version": "4.17.20"
+    },
+    "string-width-cjs": {
+      "version": "npm:string-width@4.2.3"
+    },
+    "local-lib": {
+      "version": "file:../local-lib"
+    }
+  }
+}

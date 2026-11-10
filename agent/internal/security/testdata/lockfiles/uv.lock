@@ -1,0 +1,31 @@
+version = 1
+requires-python = ">=3.12"
+
+[[package]]
+name = "anyio"
+version = "4.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "idna" },
+    { name = "sniffio" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/anyio-4.4.0.tar.gz", hash = "sha256:abc", size = 1 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/anyio-4.4.0-py3-none-any.whl", hash = "sha256:def", size = 2 },
+]
+
+[[package]]
+name = "idna"
+version = "3.7"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "myapp"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "anyio" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "anyio", specifier = ">=4" }]
